@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { PHASES, getClimateScore } from '../data/phases';
 import { SEEDS } from '../data/equipment';
+import PixelView from './PixelView';
 
-function PlantCard({ plant, climate, onHarvest, onSell, onRemove }) {
+function PlantCard({ plant, climate, onHarvest, onSell, onRemove, onWater, onFertilize }) {
   const phase = PHASES[plant.phase];
   if (!phase) return null;
 
@@ -11,6 +12,7 @@ function PlantCard({ plant, climate, onHarvest, onSell, onRemove }) {
   const isPostHarvest = ['drying', 'curing', 'ready'].includes(plant.phase);
   const isReady = plant.phase === 'ready';
   const isHarvestReady = plant.phase === 'harvest_ready';
+  const isActive = !isPostHarvest && !isHarvestReady;
 
   const pricePerG = plant.quality >= 90 ? 12 : plant.quality >= 75 ? 10 : plant.quality >= 55 ? 8 : 5;
   const estimatedRevenue = plant.harvestedGrams ? plant.harvestedGrams * pricePerG : 0;
@@ -72,6 +74,27 @@ function PlantCard({ plant, climate, onHarvest, onSell, onRemove }) {
             />
           </div>
         </div>
+
+        {/* Health Bar */}
+        {!isPostHarvest && (
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-gray-500">Gesundheit</span>
+              <span className={plant.health > 60 ? 'text-green-400' : plant.health > 30 ? 'text-yellow-400' : 'text-red-400'}>
+                {plant.health}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${plant.health}%`,
+                  background: plant.health > 60 ? '#22c55e' : plant.health > 30 ? '#eab308' : '#ef4444',
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Phase Progress */}
         {!isPostHarvest && (
@@ -136,15 +159,71 @@ function PlantCard({ plant, climate, onHarvest, onSell, onRemove }) {
           )}
         </div>
 
-        {/* Actions */}
-        {isHarvestReady && (
-          <button
-            onClick={() => onHarvest(plant.id)}
-            className="w-full bg-yellow-700 hover:bg-yellow-600 text-white text-xs py-2 rounded font-bold uppercase tracking-wide transition-colors"
-          >
-            ✂️ Ernten
-          </button>
+        {/* Water + Fertilize buttons (only for actively growing plants) */}
+        {isActive && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onWater(plant.id)}
+              disabled={plant.wateredToday}
+              className={`text-xs py-1.5 rounded font-bold transition-colors ${
+                plant.wateredToday
+                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                  : 'bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700/60 text-blue-400'
+              }`}
+            >
+              {plant.wateredToday ? '💧 Gegossen' : '💧 Gießen'}
+            </button>
+            <button
+              onClick={() => onFertilize(plant.id)}
+              disabled={plant.fertilizedToday}
+              className={`text-xs py-1.5 rounded font-bold transition-colors ${
+                plant.fertilizedToday
+                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                  : 'bg-green-900/40 hover:bg-green-800/60 border border-green-700/60 text-green-400'
+              }`}
+            >
+              {plant.fertilizedToday ? '🧪 Gedüngt' : '🧪 Düngen (1.50€)'}
+            </button>
+          </div>
         )}
+
+        {/* Harvest Action */}
+        {isHarvestReady && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onWater(plant.id)}
+                disabled={plant.wateredToday}
+                className={`text-xs py-1.5 rounded font-bold transition-colors ${
+                  plant.wateredToday
+                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                    : 'bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700/60 text-blue-400'
+                }`}
+              >
+                {plant.wateredToday ? '💧 Gegossen' : '💧 Gießen'}
+              </button>
+              <button
+                onClick={() => onFertilize(plant.id)}
+                disabled={plant.fertilizedToday}
+                className={`text-xs py-1.5 rounded font-bold transition-colors ${
+                  plant.fertilizedToday
+                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                    : 'bg-green-900/40 hover:bg-green-800/60 border border-green-700/60 text-green-400'
+                }`}
+              >
+                {plant.fertilizedToday ? '🧪 Gedüngt' : '🧪 Düngen (1.50€)'}
+              </button>
+            </div>
+            <button
+              onClick={() => onHarvest(plant.id)}
+              className="w-full bg-yellow-700 hover:bg-yellow-600 text-white text-xs py-2 rounded font-bold uppercase tracking-wide transition-colors"
+            >
+              ✂️ Ernten
+            </button>
+          </div>
+        )}
+
+        {/* Sell Action */}
         {isReady && (
           <div className="space-y-2">
             <div className="text-center text-xs text-cyan-400 font-bold">
@@ -207,6 +286,11 @@ export default function GrowRoom() {
   const sellHarvest = useGameStore(s => s.sellHarvest);
   const plantSeed = useGameStore(s => s.plantSeed);
   const removePlant = useGameStore(s => s.removePlant);
+  const waterPlant = useGameStore(s => s.waterPlant);
+  const fertilizePlant = useGameStore(s => s.fertilizePlant);
+  const settings = useGameStore(s => s.settings);
+
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'pixel'
 
   const maxSlots = equipment.tent?.maxPlants ?? 0;
   const pots = equipment.pots;
@@ -220,52 +304,94 @@ export default function GrowRoom() {
     );
   }
 
+  const activePlantCount = plants.filter(p => !['ready'].includes(p.phase)).length;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+      {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="text-xs text-gray-500">
-          {equipment.tent.name} • {plants.filter(p => !['ready'].includes(p.phase)).length}/{maxSlots} Plätze belegt
+          {equipment.tent.name} • {activePlantCount}/{maxSlots} Plätze belegt
         </div>
-        <div className="text-xs text-gray-500">
-          {pots.length} Töpfe • {plants.length} Pflanzen gesamt
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-gray-500">
+            {pots.length} Töpfe • {plants.length} Pflanzen gesamt
+          </div>
+          {/* View toggle */}
+          <div className="flex border border-gray-700 rounded overflow-hidden">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`text-xs px-3 py-1.5 transition-colors ${
+                viewMode === 'cards'
+                  ? 'bg-green-900/50 text-green-400'
+                  : 'bg-gray-900 text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              ▤ Karten
+            </button>
+            <button
+              onClick={() => setViewMode('pixel')}
+              className={`text-xs px-3 py-1.5 transition-colors ${
+                viewMode === 'pixel'
+                  ? 'bg-green-900/50 text-green-400'
+                  : 'bg-gray-900 text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              ▦ Grundriss
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Aktive / Post-Harvest Pflanzen */}
-        {plants
-          .filter(p => !['ready'].includes(p.phase))
-          .map(p => (
-            <PlantCard
-              key={p.id}
-              plant={p}
-              climate={climate}
-              onHarvest={harvestPlant}
-              onSell={sellHarvest}
-              onRemove={removePlant}
-            />
-          ))}
+      {/* Pixel floor plan view */}
+      {viewMode === 'pixel' && (
+        <div className="overflow-x-auto pb-2">
+          <PixelView plants={plants} pots={pots} equipment={equipment} settings={settings} />
+        </div>
+      )}
 
-        {/* Leere Töpfe */}
-        {Array.from({ length: Math.max(0, pots.length - plants.filter(p => !['ready'].includes(p.phase)).length) }).map((_, i) => {
-          const idx = plants.filter(p => !['ready'].includes(p.phase)).length + i;
-          return <EmptyPot key={idx} index={idx} onPlant={plantSeed} />;
-        })}
+      {/* Card view */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Aktive / Post-Harvest Pflanzen */}
+          {plants
+            .filter(p => !['ready'].includes(p.phase))
+            .map(p => (
+              <PlantCard
+                key={p.id}
+                plant={p}
+                climate={climate}
+                onHarvest={harvestPlant}
+                onSell={sellHarvest}
+                onRemove={removePlant}
+                onWater={waterPlant}
+                onFertilize={fertilizePlant}
+              />
+            ))}
 
-        {/* Verkaufsfertige Pflanzen */}
-        {plants
-          .filter(p => p.phase === 'ready')
-          .map(p => (
-            <PlantCard
-              key={p.id}
-              plant={p}
-              climate={climate}
-              onHarvest={harvestPlant}
-              onSell={sellHarvest}
-              onRemove={removePlant}
-            />
-          ))}
-      </div>
+          {/* Leere Töpfe */}
+          {Array.from({ length: Math.max(0, pots.length - plants.filter(p => !['ready'].includes(p.phase)).length) }).map((_, i) => {
+            const idx = plants.filter(p => !['ready'].includes(p.phase)).length + i;
+            return <EmptyPot key={idx} index={idx} onPlant={plantSeed} />;
+          })}
+
+          {/* Verkaufsfertige Pflanzen */}
+          {plants
+            .filter(p => p.phase === 'ready')
+            .map(p => (
+              <PlantCard
+                key={p.id}
+                plant={p}
+                climate={climate}
+                onHarvest={harvestPlant}
+                onSell={sellHarvest}
+                onRemove={removePlant}
+                onWater={waterPlant}
+                onFertilize={fertilizePlant}
+              />
+            ))}
+        </div>
+      )}
 
       {pots.length === 0 && (
         <div className="text-center text-gray-600 text-sm py-8">

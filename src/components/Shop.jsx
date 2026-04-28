@@ -15,10 +15,14 @@ const CATEGORIES = [
   { id: 'tool', label: 'Werkzeuge', icon: '🔧', items: TOOLS },
 ];
 
-function ItemCard({ item, category, equipped, owned, onBuy, money }) {
+// Single-slot equipment categories (one item at a time)
+const SINGLE_SLOT = ['tent', 'lamp', 'exhaust', 'fan', 'filter', 'nutrients'];
+
+function ItemCard({ item, category, equipped, owned, onBuy, onSell, money }) {
   const canAfford = money >= item.price;
   const isEquipped = equipped && equipped.id === item.id;
   const isOwned = owned;
+  const refund = Math.floor(item.price / 2);
 
   let statusLabel = null;
   let statusStyle = '';
@@ -56,7 +60,18 @@ function ItemCard({ item, category, equipped, owned, onBuy, money }) {
       </div>
 
       {statusLabel ? (
-        <div className={`text-center text-xs py-1 rounded border ${statusStyle}`}>{statusLabel}</div>
+        <div className="space-y-2">
+          <div className={`text-center text-xs py-1 rounded border ${statusStyle}`}>{statusLabel}</div>
+          {/* Sell button for owned/active items */}
+          {onSell && (
+            <button
+              onClick={() => onSell(item)}
+              className="w-full text-xs py-1.5 rounded border border-orange-700/60 bg-orange-900/20 hover:bg-orange-800/30 text-orange-400 transition-colors font-bold"
+            >
+              💰 Verkaufen ({refund} €)
+            </button>
+          )}
+        </div>
       ) : (
         <button
           onClick={() => onBuy(item)}
@@ -74,13 +89,53 @@ function ItemCard({ item, category, equipped, owned, onBuy, money }) {
   );
 }
 
+function OwnedPotsList({ pots, onSell, plants }) {
+  if (pots.length === 0) return null;
+
+  return (
+    <div className="mb-4 bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+      <div className="text-xs text-gray-500 uppercase tracking-wide mb-3">🪴 Meine Töpfe</div>
+      <div className="space-y-2">
+        {pots.map((pot, index) => {
+          const occupied = plants.some(p => p.potIndex === index && !['ready'].includes(p.phase));
+          const refund = Math.floor(pot.price / 2);
+          return (
+            <div key={index} className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded px-3 py-2">
+              <div>
+                <span className="text-xs text-gray-300">{pot.name}</span>
+                <span className="text-xs text-gray-600 ml-2">Slot {index + 1}</span>
+                {occupied && <span className="text-xs text-red-500 ml-2">• belegt</span>}
+              </div>
+              <button
+                onClick={() => onSell(index)}
+                disabled={occupied}
+                className={`text-xs px-3 py-1 rounded font-bold transition-colors ${
+                  occupied
+                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                    : 'bg-orange-900/30 hover:bg-orange-800/40 border border-orange-700/60 text-orange-400'
+                }`}
+              >
+                {occupied ? 'Belegt' : `Verkaufen (${refund}€)`}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Shop() {
   const [activeCat, setActiveCat] = useState('tent');
   const money = useGameStore(s => s.money);
   const equipment = useGameStore(s => s.equipment);
+  const plants = useGameStore(s => s.plants);
   const buyEquipment = useGameStore(s => s.buyEquipment);
   const buyTool = useGameStore(s => s.buyTool);
   const buyPot = useGameStore(s => s.buyPot);
+  const sellEquipment = useGameStore(s => s.sellEquipment);
+  const sellTool = useGameStore(s => s.sellTool);
+  const sellPot = useGameStore(s => s.sellPot);
 
   const cat = CATEGORIES.find(c => c.id === activeCat);
 
@@ -94,9 +149,25 @@ export default function Shop() {
     }
   }
 
+  function handleSell(item) {
+    if (activeCat === 'tool') {
+      sellTool(item.id);
+    } else if (SINGLE_SLOT.includes(activeCat)) {
+      sellEquipment(activeCat);
+    }
+  }
+
   function isOwned(item) {
     if (activeCat === 'tool') return equipment.tools.includes(item.id);
-    if (activeCat === 'pot') return false; // multiple allowed
+    if (activeCat === 'pot') return false;
+    return false;
+  }
+
+  function canSell(item) {
+    if (activeCat === 'tool') return equipment.tools.includes(item.id);
+    if (SINGLE_SLOT.includes(activeCat)) {
+      return equipment[activeCat]?.id === item.id;
+    }
     return false;
   }
 
@@ -108,6 +179,12 @@ export default function Shop() {
         <span className={`font-bold text-lg ${money < 200 ? 'text-red-400' : 'text-yellow-400'}`}>
           {money.toFixed(2)} €
         </span>
+      </div>
+
+      {/* Sell hint */}
+      <div className="flex items-center gap-2 text-xs text-orange-400/70 bg-orange-900/10 border border-orange-900/30 rounded px-3 py-2">
+        <span>💰</span>
+        <span>Ausrüstung kann für 50% des Kaufpreises weiterverkauft werden.</span>
       </div>
 
       {/* Category Tabs */}
@@ -145,6 +222,12 @@ export default function Shop() {
               </span>
             )}
           </div>
+
+          {/* Owned pots list with sell buttons */}
+          {activeCat === 'pot' && (
+            <OwnedPotsList pots={equipment.pots} onSell={sellPot} plants={plants} />
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {cat.items.map(item => (
               <ItemCard
@@ -154,6 +237,7 @@ export default function Shop() {
                 equipped={equipment[activeCat]}
                 owned={isOwned(item)}
                 onBuy={handleBuy}
+                onSell={canSell(item) ? handleSell : null}
                 money={money}
               />
             ))}

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { calcClimate, calcDailyElectricity } from '../utils/climate';
 import { getClimateScore } from '../data/phases';
-import { SEEDS } from '../data/equipment';
+import { SEEDS, TOOLS } from '../data/equipment';
 
 const GAME_DAY_MS = 8 * 60 * 1000; // 8 minutes real = 1 game day
+export { GAME_DAY_MS };
 
 let plantIdCounter = 0;
 const newPlantId = () => `plant_${++plantIdCounter}`;
@@ -35,6 +36,8 @@ function createPlant(strainId, potItem) {
     harvested: false,
     dryingDay: 0,
     curingDay: 0,
+    wateredToday: false,
+    fertilizedToday: false,
   };
 }
 
@@ -48,7 +51,6 @@ function advancePlantPhase(plant, autoTrigger) {
       if (p.phaseDay >= p.seedlingDays) { p.phase = 'vegetative'; p.phaseDay = 0; }
       break;
     case 'vegetative':
-      // photo needs 12/12 trigger; auto advances automatically
       if (p.type === 'auto' && p.phaseDay >= p.vegDays) {
         p.phase = 'flowering'; p.phaseDay = 0;
       } else if (p.type === 'photo' && autoTrigger && p.phaseDay >= p.vegDays) {
@@ -84,7 +86,7 @@ function calcPlantQualityDelta(plant, climate, tools) {
   if (['harvested', 'ready'].includes(phaseId)) return 0;
 
   const score = getClimateScore(climate, phaseId);
-  const delta = (score - 85) * 0.15; // gain/lose up to ~2.25 per day
+  const delta = (score - 85) * 0.15;
 
   let toolBonus = 0;
   if (tools.includes('tool_ph')) toolBonus += 0.3;
@@ -126,15 +128,15 @@ export const useGameStore = create((set, get) => ({
     exhaust: null,
     fan: null,
     filter: null,
-    pots: [],        // array of pot items (one per slot)
+    pots: [],
     nutrients: null,
-    tools: [],       // array of tool ids
+    tools: [],
   },
 
-  // --- settings (adjustable during game) ---
+  // --- settings ---
   settings: {
     lampHours: 18,
-    exhaustSpeed: 70, // 0–100 %
+    exhaustSpeed: 70,
   },
 
   // --- plants ---
@@ -144,7 +146,7 @@ export const useGameStore = create((set, get) => ({
   climate: { temperature: 22, humidity: 55, lightHours: 18 },
 
   // --- financials ---
-  transactions: [],   // { day, desc, amount }
+  transactions: [],
   totalSpent: 0,
   totalRevenue: 0,
   electricityAccrued: 0,
@@ -173,7 +175,7 @@ export const useGameStore = create((set, get) => ({
   },
 
   // -------------------------------------------------------
-  // SHOP
+  // SHOP – BUY
   // -------------------------------------------------------
   buyEquipment(category, item) {
     const { money, equipment, _addNotification, _addTransaction } = get();
@@ -229,6 +231,80 @@ export const useGameStore = create((set, get) => ({
   },
 
   // -------------------------------------------------------
+  // SHOP – SELL (50% Rückgabe)
+  // -------------------------------------------------------
+  sellEquipment(category) {
+    const { equipment, plants, money, _addNotification, _addTransaction } = get();
+    const item = equipment[category];
+    if (!item) {
+      _addNotification('Kein Gerät vorhanden!', 'error');
+      return false;
+    }
+    if (category === 'tent') {
+      const activePlants = plants.filter(p => !['ready'].includes(p.phase));
+      if (activePlants.length > 0) {
+        _addNotification('Zelt kann nicht verkauft werden – Pflanzen aktiv!', 'error');
+        return false;
+      }
+    }
+    const refund = Math.floor(item.price / 2);
+    set({
+      money: money + refund,
+      equipment: { ...equipment, [category]: null },
+    });
+    _addTransaction(`Verkauf: ${item.name}`, refund);
+    _addNotification(`${item.name} für ${refund}€ verkauft`, 'success');
+    return true;
+  },
+
+  sellTool(toolId) {
+    const { equipment, money, _addNotification, _addTransaction } = get();
+    if (!equipment.tools.includes(toolId)) {
+      _addNotification('Werkzeug nicht vorhanden!', 'error');
+      return false;
+    }
+    const toolItem = TOOLS.find(t => t.id === toolId);
+    if (!toolItem) return false;
+    const refund = Math.floor(toolItem.price / 2);
+    set({
+      money: money + refund,
+      equipment: { ...equipment, tools: equipment.tools.filter(t => t !== toolId) },
+    });
+    _addTransaction(`Verkauf: ${toolItem.name}`, refund);
+    _addNotification(`${toolItem.name} für ${refund}€ verkauft`, 'success');
+    return true;
+  },
+
+  sellPot(potIndex) {
+    const { equipment, plants, money, _addNotification, _addTransaction } = get();
+    const pot = equipment.pots[potIndex];
+    if (!pot) {
+      _addNotification('Kein Topf an dieser Position!', 'error');
+      return false;
+    }
+    const occupied = plants.some(p => p.potIndex === potIndex && !['ready'].includes(p.phase));
+    if (occupied) {
+      _addNotification('Topf ist belegt! Pflanze zuerst entfernen.', 'error');
+      return false;
+    }
+    const refund = Math.floor(pot.price / 2);
+    const newPots = [...equipment.pots];
+    newPots.splice(potIndex, 1);
+    // shift potIndex for plants that had higher slot indices
+    const updatedPlants = plants.map(p =>
+      p.potIndex > potIndex ? { ...p, potIndex: p.potIndex - 1 } : p
+    );
+    set({
+      money: money + refund,
+      equipment: { ...equipment, pots: newPots },
+      plants: updatedPlants,
+    });
+    _addTransaction(`Verkauf: ${pot.name}`, refund);
+    _addNotification(`${pot.name} für ${refund}€ verkauft`, 'success');
+    return true;
+  },
+
+  // -------------------------------------------------------
   // PLANTING
   // -------------------------------------------------------
   plantSeed(strainId, potIndex) {
@@ -258,6 +334,62 @@ export const useGameStore = create((set, get) => ({
 
   removePlant(plantId) {
     set(s => ({ plants: s.plants.filter(p => p.id !== plantId) }));
+  },
+
+  // -------------------------------------------------------
+  // PFLANZENPFLEGE
+  // -------------------------------------------------------
+  waterPlant(plantId) {
+    const { plants, _addNotification } = get();
+    const plant = plants.find(p => p.id === plantId);
+    if (!plant) return;
+    const inactive = ['drying', 'curing', 'ready', 'harvest_ready'];
+    if (inactive.includes(plant.phase)) {
+      _addNotification('Pflanze benötigt kein Gießen.', 'warn');
+      return;
+    }
+    if (plant.wateredToday) {
+      _addNotification('Heute bereits gegossen!', 'warn');
+      return;
+    }
+    set(s => ({
+      plants: s.plants.map(p =>
+        p.id === plantId
+          ? { ...p, health: Math.min(100, p.health + 5), wateredToday: true }
+          : p
+      ),
+    }));
+    _addNotification(`${plant.strainName} gegossen! +5 Gesundheit`, 'success');
+  },
+
+  fertilizePlant(plantId) {
+    const { plants, money, _addNotification, _addTransaction } = get();
+    const plant = plants.find(p => p.id === plantId);
+    if (!plant) return;
+    const inactive = ['drying', 'curing', 'ready', 'harvest_ready'];
+    if (inactive.includes(plant.phase)) {
+      _addNotification('Pflanze kann jetzt nicht gedüngt werden.', 'warn');
+      return;
+    }
+    if (plant.fertilizedToday) {
+      _addNotification('Heute bereits gedüngt!', 'warn');
+      return;
+    }
+    const cost = 1.5;
+    if (money < cost) {
+      _addNotification('Nicht genug Geld zum Düngen!', 'error');
+      return;
+    }
+    set(s => ({
+      money: s.money - cost,
+      plants: s.plants.map(p =>
+        p.id === plantId
+          ? { ...p, quality: Math.min(100, p.quality + 3), fertilizedToday: true }
+          : p
+      ),
+    }));
+    _addTransaction(`Düngen: ${plant.strainName}`, -cost);
+    _addNotification(`${plant.strainName} gedüngt! +3% Qualität`, 'success');
   },
 
   // -------------------------------------------------------
@@ -334,6 +466,17 @@ export const useGameStore = create((set, get) => ({
     set({ tickerId: null });
   },
 
+  endDay() {
+    const { tickerId, gameOver } = get();
+    if (gameOver) return;
+    if (tickerId) clearInterval(tickerId);
+    get()._tick();
+    const id = setInterval(() => {
+      get()._tick();
+    }, GAME_DAY_MS);
+    set({ tickerId: id, lastTick: Date.now() });
+  },
+
   _tick() {
     const state = get();
     const {
@@ -341,7 +484,6 @@ export const useGameStore = create((set, get) => ({
       _addNotification, _addTransaction,
     } = state;
 
-    // Climate
     const activePlants = plants.filter(p => !['drying', 'curing', 'ready'].includes(p.phase));
     const climate = calcClimate(equipment, settings, activePlants.length);
     const dailyElec = calcDailyElectricity(equipment, settings);
@@ -355,26 +497,21 @@ export const useGameStore = create((set, get) => ({
       return;
     }
 
-    // Advance plants
     const photoTrigger = equipment.lamp && settings.lampHours <= 12;
     const updatedPlants = plants.map(plant => {
       let p = { ...plant };
 
-      // Drying / Curing progress
       if (p.phase === 'drying') {
         p.dryingDay = (p.dryingDay || 0) + 1;
       } else if (p.phase === 'curing') {
         p.curingDay = (p.curingDay || 0) + 1;
-        // Quality improves during curing
         p.quality = Math.min(100, p.quality + 0.5);
       }
 
       if (!['drying', 'curing', 'ready'].includes(p.phase)) {
-        // Quality update
         const qDelta = calcPlantQualityDelta(p, climate, equipment.tools);
         p.quality = Math.max(0, Math.min(100, p.quality + qDelta));
 
-        // Health penalty if quality very low
         if (p.quality < 20) p.health = Math.max(0, p.health - 2);
 
         p.phaseDay += 1;
@@ -399,6 +536,10 @@ export const useGameStore = create((set, get) => ({
         _addNotification(`${p.strainName} ist verkaufsbereit!`, 'success');
       }
 
+      // reset daily flags
+      p.wateredToday = false;
+      p.fertilizedToday = false;
+
       return p;
     });
 
@@ -408,6 +549,7 @@ export const useGameStore = create((set, get) => ({
       plants: updatedPlants,
       climate,
       electricityAccrued: Math.round((state.electricityAccrued + dailyElec) * 100) / 100,
+      lastTick: Date.now(),
     });
 
     if ((day + 1) % 30 === 0) {
