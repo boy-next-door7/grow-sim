@@ -2,23 +2,28 @@ import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import {
   TENTS, LAMPS, EXHAUSTS, FANS, FILTERS, POTS,
-  NUTRIENTS, TOOLS, SEEDS, SUBSTRATES,
+  NUTRIENTS, TOOLS, SEEDS, SUBSTRATES, DRIP_SYSTEMS, CONTROLLERS,
 } from '../data/equipment';
 
 const CATEGORIES = [
-  { id: 'tent',      label: 'Zelte',       icon: '🏕️' },
-  { id: 'lamp',      label: 'Lampen',      icon: '💡' },
-  { id: 'exhaust',   label: 'Abluft',      icon: '🌀' },
-  { id: 'fan',       label: 'Ventilatoren',icon: '💨' },
-  { id: 'filter',    label: 'Filter',      icon: '🫧' },
-  { id: 'pot',       label: 'Töpfe',       icon: '🪴' },
-  { id: 'seeds',     label: 'Samen',       icon: '🌱' },
-  { id: 'substrate', label: 'Substrat',    icon: '🪨' },
-  { id: 'nutrients', label: 'Dünger',      icon: '🧪' },
-  { id: 'tool',      label: 'Werkzeuge',   icon: '🔧' },
+  { id: 'tent',       label: 'Zelte',        icon: '🏕️' },
+  { id: 'lamp',       label: 'Lampen',       icon: '💡' },
+  { id: 'exhaust',    label: 'Abluft',       icon: '🌀' },
+  { id: 'fan',        label: 'Ventilatoren', icon: '💨' },
+  { id: 'filter',     label: 'Filter',       icon: '🫧' },
+  { id: 'pot',        label: 'Töpfe',        icon: '🪴' },
+  { id: 'drip',       label: 'Bewässerung',  icon: '💧' },
+  { id: 'controller', label: 'Controller',   icon: '🤖' },
+  { id: 'seeds',      label: 'Samen',        icon: '🌱' },
+  { id: 'substrate',  label: 'Substrat',     icon: '🪨' },
+  { id: 'nutrients',  label: 'Dünger',       icon: '🧪' },
+  { id: 'tool',       label: 'Werkzeuge',    icon: '🔧' },
 ];
 
-const EQUIP_ITEMS = { tent: TENTS, lamp: LAMPS, exhaust: EXHAUSTS, fan: FANS, filter: FILTERS };
+const EQUIP_ITEMS = {
+  tent: TENTS, lamp: LAMPS, exhaust: EXHAUSTS, fan: FANS, filter: FILTERS,
+  drip: DRIP_SYSTEMS, controller: CONTROLLERS,
+};
 
 // ── Equipment (single-slot per room) ──────────────────────
 function EquipCard({ item, equipped, onBuy, onSell, money }) {
@@ -48,6 +53,10 @@ function EquipCard({ item, equipped, onBuy, onSell, money }) {
         )}
         {item.cooling    && <span className="bg-gray-800 px-2 py-0.5 rounded text-blue-400">-{item.cooling}°C</span>}
         {item.dehumid    && <span className="bg-gray-800 px-2 py-0.5 rounded text-blue-300">-{item.dehumid}% LF</span>}
+        {item.waterEvery && <span className="bg-blue-900/40 px-2 py-0.5 rounded text-blue-300">💧 alle {item.waterEvery}d</span>}
+        {item.autoClimate === true  && <span className="bg-green-900/40 px-2 py-0.5 rounded text-green-400">🤖 Smart-Auto</span>}
+        {item.autoClimate === false && item.qualityBonus && <span className="bg-gray-800 px-2 py-0.5 rounded text-gray-400">Timer</span>}
+        {item.qualityBonus && <span className="bg-green-900/30 px-2 py-0.5 rounded text-green-500">+{item.qualityBonus}/Tag Qual.</span>}
       </div>
       {isEquipped ? (
         <div className="space-y-1.5">
@@ -288,12 +297,20 @@ export default function Shop() {
 
   // Tab badge helpers
   function bagde(id) {
-    if (id === 'pot') return activeRoom?.pots.length > 0 ? activeRoom.pots.length : null;
+    if (id === 'pot')  return activeRoom?.pots.length > 0 ? activeRoom.pots.length : null;
     if (id === 'tool') return inventory.tools.length > 0 ? inventory.tools.length : null;
     if (EQUIP_ITEMS[id]) return activeRoom?.[id] ? '✓' : null;
     if (id === 'seeds') {
       const total = Object.values(inventory.seeds).reduce((a, b) => a + b, 0);
       return total > 0 ? total : null;
+    }
+    if (id === 'substrate') {
+      const total = Object.values(inventory.substrate).reduce((a, b) => a + b, 0);
+      return total > 0 ? `${total}L` : null;
+    }
+    if (id === 'nutrients') {
+      const total = Object.values(inventory.nutrients).reduce((a, b) => a + b, 0);
+      return total > 0 ? `${total}ml` : null;
     }
     return null;
   }

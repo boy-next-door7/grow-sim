@@ -36,11 +36,13 @@ export function calcClimate(room, plantCount) {
 }
 
 export function calcDailyElectricity(room) {
-  const { lamp, exhaust, fan, lampHours, lampIntensity = 100, exhaustSpeed } = room;
+  const { lamp, exhaust, fan, drip, controller, lampHours, lampIntensity = 100, exhaustSpeed } = room;
   let wh = 0;
-  if (lamp)    wh += lamp.watt    * (lampIntensity / 100) * lampHours;
-  if (exhaust) wh += exhaust.watt * (exhaustSpeed / 100)  * 24;
-  if (fan)     wh += fan.watt * 24;
+  if (lamp)       wh += lamp.watt       * (lampIntensity / 100) * lampHours;
+  if (exhaust)    wh += exhaust.watt    * (exhaustSpeed / 100)  * 24;
+  if (fan)        wh += fan.watt * 24;
+  if (drip)       wh += drip.watt * 24;
+  if (controller) wh += controller.watt * 24;
   return Math.round((wh / 1000) * 0.35 * 100) / 100;
 }
 

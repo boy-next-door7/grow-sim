@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { calcClimate, calcDailyElectricity } from '../utils/climate';
 import { getClimateScore, getNutrientMatchScore, PHASES } from '../data/phases';
-import { SEEDS, NUTRIENTS, TOOLS, SUBSTRATES } from '../data/equipment';
+import { SEEDS, NUTRIENTS, TOOLS, SUBSTRATES, DRIP_SYSTEMS, CONTROLLERS } from '../data/equipment';
 
 export const GAME_DAY_MS = 8 * 60 * 1000;
 
@@ -19,6 +19,7 @@ function makeRoom(overrides = {}) {
     exhaust: null, exhaustSpeed: 70,
     fan: null, filter: null,
     pots: [],
+    drip: null, controller: null,
     climate: { temperature: 22, humidity: 55, lightHours: 18, effectivePPFD: 0 },
     ...overrides,
   };
@@ -52,6 +53,7 @@ function makePlant(strain, potItem, substrateBonus = 0, overrides = {}) {
     curingDay: 0,
     wateredToday: false,
     fertilizedToday: false,
+    daysUnwatered: 0,
     substrateBonus,
     isMother: false,
     isClone: false,
@@ -483,8 +485,25 @@ export const useGameStore = create((set, get) => ({
       const rPlants = plants.filter(p => p.roomId === room.id && !['drying','curing','ready'].includes(p.phase));
       const climate = calcClimate(room, rPlants.length);
       totalElec += calcDailyElectricity(room);
-      return { ...room, climate };
+
+      let next = { ...room, climate };
+
+      // Smart controller: auto-adjust exhaustSpeed toward 24°C target
+      if (room.controller?.autoClimate && room.exhaust) {
+        const diff = climate.temperature - 24;
+        if (Math.abs(diff) > 1) {
+          const adj = Math.sign(diff) * Math.min(10, Math.abs(Math.round(diff * 2)));
+          next = { ...next, exhaustSpeed: Math.max(10, Math.min(100, room.exhaustSpeed + adj)) };
+        }
+      }
+
+      return next;
     });
+
+    // Rooms with active auto-watering today
+    const autoWateredRooms = new Set(
+      updatedRooms.filter(r => r.drip && (day % r.drip.waterEvery === 0)).map(r => r.id)
+    );
 
     const waterCost = plants.filter(p => !['drying','curing','ready'].includes(p.phase)).length * 0.5;
     const dailyCost = totalElec + waterCost;
@@ -508,6 +527,24 @@ export const useGameStore = create((set, get) => ({
         p.curingDay += 1;
         p.quality = Math.min(100, p.quality + 0.5);
       } else if (!['ready'].includes(p.phase)) {
+        // Water need tracking
+        const isAutoWatered = autoWateredRooms.has(plant.roomId);
+        const effectivelyWatered = p.wateredToday || isAutoWatered;
+        if (effectivelyWatered) {
+          p.daysUnwatered = 0;
+        } else {
+          p.daysUnwatered = (p.daysUnwatered ?? 0) + 1;
+          const penalty = p.daysUnwatered >= 3 ? 8 : p.daysUnwatered >= 2 ? 5 : 3;
+          p.health = Math.max(0, p.health - penalty);
+          if (p.daysUnwatered === 2) _addNotification(`${p.strainName} dringend wässern! (${p.daysUnwatered} Tage trocken)`, 'warn');
+          if (p.daysUnwatered === 4) _addNotification(`${p.strainName} verdorrt fast! Sofort gießen!`, 'error');
+        }
+
+        // Controller quality bonus
+        if (room?.controller?.qualityBonus) {
+          p.quality = Math.min(100, p.quality + room.controller.qualityBonus);
+        }
+
         const d = calcQualityDelta(p, climate, inventory.tools);
         p.quality = Math.max(0, Math.min(100, p.quality + d));
         if (p.quality < 20) p.health = Math.max(0, p.health - 2);

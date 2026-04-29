@@ -41,17 +41,20 @@ const PHASE_LABELS = {
 };
 
 function PlantTile({ plant, size, onClick }) {
-  const px    = size >= 80 ? 6 : 5;
-  const isHR  = plant.phase === 'harvest_ready';
-  const isRdy = plant.phase === 'ready';
-  const color = plant.strainColor || '#86efac';
+  const px       = size >= 80 ? 6 : 5;
+  const isHR     = plant.phase === 'harvest_ready';
+  const isRdy    = plant.phase === 'ready';
+  const color    = plant.strainColor || '#86efac';
+  const dry      = plant.daysUnwatered ?? 0;
+  const needsWater = dry > 0 && !['drying','curing','ready'].includes(plant.phase);
+  const dryColor = dry >= 3 ? '#ef4444' : dry >= 2 ? '#f97316' : '#93c5fd';
 
   return (
     <div
       onClick={onClick}
       className={`flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all hover:brightness-125 ${isHR?'pixel-blink':''} ${isRdy?'pixel-glow':''}`}
-      style={{ width:size, height:size, background:'#0d1a08', border:`2px solid ${color}50`, imageRendering:'pixelated', userSelect:'none' }}
-      title={`${plant.strainName} — ${plant.phase}`}
+      style={{ width:size, height:size, background:'#0d1a08', border:`2px solid ${needsWater ? dryColor+'80' : color+'50'}`, imageRendering:'pixelated', userSelect:'none' }}
+      title={`${plant.strainName} — ${plant.phase}${dry > 0 ? ` — ${dry}d ohne Wasser!` : ''}`}
     >
       <Sprite phase={plant.phase} color={color} px={px} />
       <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:4, color, letterSpacing:0, lineHeight:1.4, textAlign:'center' }}>
@@ -61,9 +64,17 @@ function PlantTile({ plant, size, onClick }) {
       <div style={{ width:'80%', height:2, background:'#111' }}>
         <div style={{ height:'100%', width:`${plant.health}%`, background: plant.health>60?'#22c55e':plant.health>30?'#eab308':'#ef4444' }} />
       </div>
-      {plant.isMother && (
-        <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:3, color:'#4ade80' }}>M</div>
-      )}
+      {/* badges row */}
+      <div style={{ display:'flex', gap:3, alignItems:'center', height:6 }}>
+        {needsWater && (
+          <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:3, color:dryColor, lineHeight:1 }}>
+            {dry >= 2 ? '!!' : '!'}{dry}D
+          </div>
+        )}
+        {plant.isMother && (
+          <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:3, color:'#4ade80', lineHeight:1 }}>M</div>
+        )}
+      </div>
     </div>
   );
 }

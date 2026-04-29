@@ -225,3 +225,46 @@ export const SEEDS = [
 
 export const ELECTRICITY_PRICE = 0.35;
 export const WATER_COST_PER_PLANT_DAY = 0.5;
+
+// Bewässerungssysteme – per room slot, automatisiert das Gießen
+// waterEvery = alle N Tage automatisch gießen (1 = täglich, 2 = jeden 2. Tag)
+export const DRIP_SYSTEMS = [
+  {
+    id: 'drip_basic',
+    name: 'Tropfsystem Basic',
+    price: 35,
+    watt: 5,
+    waterEvery: 2,
+    desc: 'Gießt automatisch alle 2 Tage — halbiert den Trockenheits-Stress',
+  },
+  {
+    id: 'drip_auto',
+    name: 'Auto-Bewässerung Pro',
+    price: 120,
+    watt: 8,
+    waterEvery: 1,
+    desc: 'Vollautomatische tägliche Bewässerung — kein manuelles Gießen nötig',
+  },
+];
+
+// Klima-Controller – per room slot, automatisiert Klima-Steuerung
+export const CONTROLLERS = [
+  {
+    id: 'ctrl_timer',
+    name: 'Zeitschaltuhr',
+    price: 45,
+    watt: 2,
+    autoClimate: false,
+    qualityBonus: 0.05,
+    desc: 'Konsistente Lichtzyklen +0.05% Qualität/Tag',
+  },
+  {
+    id: 'ctrl_smart',
+    name: 'Smart-Controller',
+    price: 250,
+    watt: 10,
+    autoClimate: true,
+    qualityBonus: 0.05,
+    desc: 'Regelt Abluft automatisch auf Zieltemperatur 24°C',
+  },
+];
