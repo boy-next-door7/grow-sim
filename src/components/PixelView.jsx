@@ -1,34 +1,93 @@
 // 8-bit Pokemon-style floor plan — interactive tiles
 
+// X = main plant color, D = dark stem/shadow, B = bright trichome frost
 const SPRITES = {
-  germination:   ['........','........','..XXXX..', '.XXXXXX.','.XXXXXX.','..XXXX..','........','........'],
+  germination:   ['........','........','..XXXX..','..XXXXXX','.XXXXXX.','..XXXX..','........','........'],
   clone_rooting: ['........','...X....','..XX....', '.XXX....','..XX....','...X....','..XXX...','........'],
-  seedling:      ['........','...X....','..XXX...', '...X....','..XXX...','.X.X.X..','..XXX...','........'],
-  vegetative:    ['.X...X..','..XXX...','.XXXXX..', 'XXXXXXX.','.XXXXX..','...X....','..DXD...','..DDD...'],
-  flowering:     ['X.X.X.X.','.XXXXXXX','XXXXXXXX', '.XXXXXX.','..XXXX..','...XX...','..DXD...','..DDD...'],
-  late_flower:   ['XXXXXXXX','XXXXXXXX','XXXXXXXX', '.XXXXXX.','.XXXXXX.','...XX...','..DXD...','..DDD...'],
-  harvest_ready: ['.X.XX.X.','XXXXXXXX','XXXXXXXX', 'XXXXXXXX','.XXXXXX.','...XX...','..DXD...','..DDD...'],
-  drying:        ['XXXXXXXX','.XX.XX..','..X.X...', '...X....','...X....','...X....','........','........'],
-  curing:        ['.XXXXXX.','XXXXXXXX','X.XXXX.X', 'X......X','X.XXXX.X','X......X','XXXXXXXX','........'],
-  ready:         ['...X....','..X.X...', '.X...X..','X.XXX..X','.X...X..','..X.X...','...X....','........'],
+  seedling:      ['........','...X....','..XXX...','.XXXXX..','..XXX...','.X.X.X..','...X....','........'],
+  vegetative:    ['.X...X..','..XXX...','.XXXXX..','XXXXXXX.','.XXXXX..','...X....','..DXD...','..DDD...'],
+  // generic fallback for flowering (overridden by STRAIN_SPRITES below)
+  flowering:     ['X.X.X.X.','.XXXXXXX','XXXXXXXX','.XXXXXX.','..XXXX..','...XX...','..DXD...','..DDD...'],
+  late_flower:   ['XXXXXXXX','XXXXXXXX','XXXXXXXX','.XXXXXX.','.XXXXXX.','...XX...','..DXD...','..DDD...'],
+  harvest_ready: ['.X.XX.X.','XXXXXXXX','XXXXXXXX','XXXXXXXX','.XXXXXX.','...XX...','..DXD...','..DDD...'],
+  drying:        ['X.X.X.X.','.XX.XX..','..X.X...','...X....','...X....','...X....','........','........'],
+  curing:        ['.XXXXXX.','XXXXXXXX','X.XXXX.X','X......X','X.XXXX.X','X......X','XXXXXXXX','........'],
+  ready:         ['...X....','..X.X...','.X...X..','X.XXX..X','.X...X..','..X.X...','...X....','........'],
+};
+
+// Strain-specific sprites for flowering phases
+const STRAIN_SPRITES = {
+  indica: {
+    // round, dense, fat bud structure
+    flowering:     ['..XXXX..', '.XXXXXX.', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '..DXD...', '..DDD...'],
+    late_flower:   ['BXXXXXXB', 'XXXXXXXX', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '..DXD...', '..DDD...'],
+    harvest_ready: ['BXBXXBXB', 'BXXXXXXB', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '..DXD...', '..DDD...'],
+  },
+  sativa: {
+    // elongated, loose, cola-style
+    flowering:     ['X.X.X.X.', '.X.X.X.X', 'X..XX..X', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+    late_flower:   ['X.XXXX.X', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+    harvest_ready: ['XBX.XBX.', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+  },
+  auto: {
+    // compact, small but well-formed
+    flowering:     ['..XXXX..', '.XXXXXX.', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+    late_flower:   ['.XXXXXX.', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+    harvest_ready: ['.BXXXBX.', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+  },
+};
+
+const FLOWERING_PHASES = new Set(['flowering', 'late_flower', 'harvest_ready']);
+
+const PHASE_ANIM = {
+  germination:   'plant-sprout',
+  clone_rooting: 'plant-sprout',
+  seedling:      'plant-sprout',
+  vegetative:    'plant-sway',
+  flowering:     'bud-pulse',
+  late_flower:   'bud-pulse',
+  harvest_ready: 'pixel-blink',
+  ready:         'pixel-glow',
 };
 
 function hexRgb(h) {
   const s = h.replace('#','');
   return [parseInt(s.slice(0,2),16), parseInt(s.slice(2,4),16), parseInt(s.slice(4,6),16)];
 }
-function darken(hex, a=60) {
+function darken(hex, a = 60) {
   const [r,g,b] = hexRgb(hex);
   return `rgb(${Math.max(0,r-a)},${Math.max(0,g-a)},${Math.max(0,b-a)})`;
 }
+function lighten(hex, factor = 0.65) {
+  const [r,g,b] = hexRgb(hex);
+  return `rgb(${Math.round(r+(255-r)*factor)},${Math.round(g+(255-g)*factor)},${Math.round(b+(255-b)*factor)})`;
+}
 
-function Sprite({ phase, color, px = 5 }) {
-  const rows = SPRITES[phase] ?? SPRITES.germination;
-  const dark = darken(color);
+function getBudStyle(plant) {
+  if (plant.type === 'auto') return 'auto';
+  // Deterministic hash: indica vs sativa for photo/hybrid strains
+  const id = plant.strainId ?? '';
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h += id.charCodeAt(i);
+  return h % 2 === 0 ? 'indica' : 'sativa';
+}
+
+function Sprite({ phase, color, budStyle, px = 5 }) {
+  let rows;
+  if (budStyle && FLOWERING_PHASES.has(phase)) {
+    rows = STRAIN_SPRITES[budStyle]?.[phase] ?? SPRITES[phase];
+  } else {
+    rows = SPRITES[phase] ?? SPRITES.germination;
+  }
+  const dark   = darken(color);
+  const bright = lighten(color);
   return (
     <div style={{ display:'grid', gridTemplateColumns:`repeat(8,${px}px)`, gridTemplateRows:`repeat(8,${px}px)`, imageRendering:'pixelated' }}>
       {rows.flatMap((row, y) => row.split('').map((c, x) => (
-        <div key={`${y}-${x}`} style={{ width:px, height:px, backgroundColor: c==='X'?color : c==='D'?dark : 'transparent' }} />
+        <div key={`${y}-${x}`} style={{
+          width: px, height: px,
+          backgroundColor: c==='X' ? color : c==='D' ? dark : c==='B' ? bright : 'transparent',
+        }} />
       )))}
     </div>
   );
@@ -41,22 +100,28 @@ const PHASE_LABELS = {
 };
 
 function PlantTile({ plant, size, onClick }) {
-  const px       = size >= 80 ? 6 : 5;
-  const isHR     = plant.phase === 'harvest_ready';
-  const isRdy    = plant.phase === 'ready';
-  const color    = plant.strainColor || '#86efac';
-  const dry      = plant.daysUnwatered ?? 0;
+  const px         = size >= 80 ? 6 : 5;
+  const color      = plant.strainColor || '#86efac';
+  const budStyle   = getBudStyle(plant);
+  const animClass  = PHASE_ANIM[plant.phase] ?? '';
+  const dry        = plant.daysUnwatered ?? 0;
   const needsWater = dry > 0 && !['drying','curing','ready'].includes(plant.phase);
-  const dryColor = dry >= 3 ? '#ef4444' : dry >= 2 ? '#f97316' : '#93c5fd';
+  const dryColor   = dry >= 3 ? '#ef4444' : dry >= 2 ? '#f97316' : '#93c5fd';
 
   return (
     <div
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all hover:brightness-125 ${isHR?'pixel-blink':''} ${isRdy?'pixel-glow':''}`}
-      style={{ width:size, height:size, background:'#0d1a08', border:`2px solid ${needsWater ? dryColor+'80' : color+'50'}`, imageRendering:'pixelated', userSelect:'none' }}
+      className={`flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all hover:brightness-125 ${animClass}`}
+      style={{
+        width: size, height: size,
+        background: '#0d1a08',
+        border: `2px solid ${needsWater ? dryColor+'80' : color+'50'}`,
+        imageRendering: 'pixelated',
+        userSelect: 'none',
+      }}
       title={`${plant.strainName} — ${plant.phase}${dry > 0 ? ` — ${dry}d ohne Wasser!` : ''}`}
     >
-      <Sprite phase={plant.phase} color={color} px={px} />
+      <Sprite phase={plant.phase} color={color} budStyle={budStyle} px={px} />
       <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:4, color, letterSpacing:0, lineHeight:1.4, textAlign:'center' }}>
         {PHASE_LABELS[plant.phase] ?? plant.phase.toUpperCase()}
       </div>
@@ -121,9 +186,10 @@ export default function PixelView({ room, plants, onPlantClick, onEmptyPotClick 
 
   const tent      = room.tent;
   const maxPlants = tent.maxPlants;
-  const cols      = maxPlants <= 1 ? 1 : maxPlants <= 2 ? 2 : maxPlants <= 4 ? 2 : 3;
+  const cols      = maxPlants <= 1 ? 1 : maxPlants <= 2 ? 2 : maxPlants <= 4 ? 2 : maxPlants <= 9 ? 3 : 4;
   const rows      = Math.ceil(maxPlants / cols);
-  const tileSize  = maxPlants <= 4 ? 80 : maxPlants <= 6 ? 72 : 64;
+  // Larger tents get larger tiles so overall visual size scales proportionally
+  const tileSize  = maxPlants <= 2 ? 88 : maxPlants <= 4 ? 80 : maxPlants <= 9 ? 72 : 64;
   const totalCols = cols + 2;
   const totalRows = rows + 2;
 
@@ -133,7 +199,6 @@ export default function PixelView({ room, plants, onPlantClick, onEmptyPotClick 
     : room.lamp.id?.startsWith('cmh') ? '#f0abfc'
     : '#fbbf24';
 
-  // Build slot data
   const slots = Array.from({ length: maxPlants }, (_, i) => {
     const plant  = plants.find(p => p.roomId === room.id && p.potIndex === i && p.phase !== 'ready');
     const hasPot = i < room.pots.length;
@@ -141,48 +206,45 @@ export default function PixelView({ room, plants, onPlantClick, onEmptyPotClick 
   });
 
   return (
-    <div className="space-y-2">
-      {/* Room name header */}
-      <div className="pixel-font pixel-border" style={{ borderColor:'#22c55e', background:'#0a1a0a', padding:'6px 12px', display:'inline-block', fontSize:7, color:'#4ade80' }}>
-        ▶ {tent.name.toUpperCase()}
+    <div className="pixel-tent pixel-border" style={{ borderColor:'#4a3318', display:'inline-block', padding:8 }}>
+      {/* Lamp strip */}
+      {room.lamp ? (
+        <div className="pixel-font" style={{ fontSize:5, color:lampColor, display:'flex', alignItems:'center', gap:6, borderBottom:`1px solid ${lampColor}40`, paddingBottom:5, marginBottom:4 }}>
+          <div style={{ width:5, height:5, background:lampColor }} />
+          {room.lamp.name.toUpperCase()} · {room.lampHours}H · {room.lampIntensity}%
+          <div style={{ width:5, height:5, background:lampColor }} />
+        </div>
+      ) : (
+        <div className="pixel-font" style={{ fontSize:5, color:'#333', borderBottom:'1px solid #222', paddingBottom:5, marginBottom:4 }}>
+          — KEINE LAMPE —
+        </div>
+      )}
+
+      {/* Grid */}
+      <div style={{ display:'grid', gridTemplateColumns:`repeat(${totalCols},${tileSize}px)`, gridTemplateRows:`repeat(${totalRows},${tileSize}px)`, gap:2, imageRendering:'pixelated' }}>
+        {Array.from({ length: totalRows }).flatMap((_, r) =>
+          Array.from({ length: totalCols }).map((_, c) => {
+            const key = `${r}-${c}`;
+            const isCorner = (r===0||r===totalRows-1) && (c===0||c===totalCols-1);
+            const isTB = r===0 || r===totalRows-1;
+            const isLR = c===0 || c===totalCols-1;
+            if (isTB || isLR) return <WallTile key={key} size={tileSize} corner={isCorner} top={isTB&&!isCorner} side={isLR&&!isCorner} />;
+
+            const si   = (r-1)*cols + (c-1);
+            const slot = slots[si];
+            if (!slot) return <NoSlotTile key={key} size={tileSize} />;
+            if (slot.plant) return <PlantTile key={key} plant={slot.plant} size={tileSize} onClick={() => onPlantClick(slot.plant.id)} />;
+            if (slot.hasPot) return <EmptyPotTile key={key} size={tileSize} potIndex={slot.index} onClick={() => onEmptyPotClick(room.id, slot.index)} />;
+            return <NoSlotTile key={key} size={tileSize} />;
+          })
+        )}
       </div>
 
-      <div className="pixel-tent pixel-border" style={{ borderColor:'#4a3318', display:'inline-block', padding:8 }}>
-        {/* Lamp strip */}
-        {room.lamp && (
-          <div className="pixel-font" style={{ fontSize:5, color:lampColor, display:'flex', alignItems:'center', gap:6, borderBottom:`1px solid ${lampColor}40`, paddingBottom:5, marginBottom:4 }}>
-            <div style={{ width:5, height:5, background:lampColor }} />
-            {room.lamp.name.toUpperCase()} · {room.lampHours}H · {room.lampIntensity}%
-            <div style={{ width:5, height:5, background:lampColor }} />
-          </div>
-        )}
-
-        {/* Grid */}
-        <div style={{ display:'grid', gridTemplateColumns:`repeat(${totalCols},${tileSize}px)`, gridTemplateRows:`repeat(${totalRows},${tileSize}px)`, gap:2, imageRendering:'pixelated' }}>
-          {Array.from({ length: totalRows }).flatMap((_, r) =>
-            Array.from({ length: totalCols }).map((_, c) => {
-              const key = `${r}-${c}`;
-              const isCorner = (r===0||r===totalRows-1) && (c===0||c===totalCols-1);
-              const isTB = r===0 || r===totalRows-1;
-              const isLR = c===0 || c===totalCols-1;
-              if (isTB || isLR) return <WallTile key={key} size={tileSize} corner={isCorner} top={isTB&&!isCorner} side={isLR&&!isCorner} />;
-
-              const si   = (r-1)*cols + (c-1);
-              const slot = slots[si];
-              if (!slot) return <NoSlotTile key={key} size={tileSize} />;
-              if (slot.plant) return <PlantTile key={key} plant={slot.plant} size={tileSize} onClick={() => onPlantClick(slot.plant.id)} />;
-              if (slot.hasPot) return <EmptyPotTile key={key} size={tileSize} potIndex={slot.index} onClick={() => onEmptyPotClick(room.id, slot.index)} />;
-              return <NoSlotTile key={key} size={tileSize} />;
-            })
-          )}
-        </div>
-
-        {/* Legend */}
-        <div className="pixel-font" style={{ fontSize:5, color:'#444', borderTop:'1px solid #1a1a1a', paddingTop:5, marginTop:4, display:'flex', gap:12 }}>
-          <span style={{ color:'#3d2a14' }}>█ WAND</span>
-          <span style={{ color:'#7c4a1e' }}>▣ TOPF</span>
-          <span style={{ color:'#22c55e' }}>▦ PFLANZE</span>
-        </div>
+      {/* Legend */}
+      <div className="pixel-font" style={{ fontSize:5, color:'#444', borderTop:'1px solid #1a1a1a', paddingTop:5, marginTop:4, display:'flex', gap:12 }}>
+        <span style={{ color:'#3d2a14' }}>█ WAND</span>
+        <span style={{ color:'#7c4a1e' }}>▣ TOPF</span>
+        <span style={{ color:'#22c55e' }}>▦ PFLANZE</span>
       </div>
     </div>
   );

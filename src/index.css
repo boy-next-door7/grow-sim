@@ -106,3 +106,34 @@
 .countdown-urgent {
   animation: countdown-urgent 0.6s ease-in-out infinite;
 }
+
+/* Vegetative growth sway */
+@keyframes plant-sway {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50%       { transform: rotate(1.5deg); }
+}
+
+.plant-sway {
+  animation: plant-sway 3s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+/* Flowering bud glow/pulse */
+@keyframes bud-pulse {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50%       { filter: brightness(1.25) saturate(1.35); }
+}
+
+.bud-pulse {
+  animation: bud-pulse 2s ease-in-out infinite;
+}
+
+/* Seedling / germination breathing */
+@keyframes plant-sprout {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.07); }
+}
+
+.plant-sprout {
+  animation: plant-sprout 2.5s ease-in-out infinite;
+}

@@ -33,11 +33,10 @@ export default function Header({ tab, setTab }) {
   const isUrgent = remaining < 60_000; // last minute
 
   const tabs = [
-    { id: 'overview', label: 'Übersicht' },
-    { id: 'growroom', label: 'Grow Room' },
-    { id: 'climate', label: 'Klima' },
-    { id: 'shop', label: 'Shop' },
-    { id: 'finances', label: 'Finanzen' },
+    { id: 'overview',  label: 'Übersicht' },
+    { id: 'growroom',  label: 'Grow Room' },
+    { id: 'shop',      label: 'Shop' },
+    { id: 'finances',  label: 'Finanzen' },
   ];
 
   return (

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { SUBSTRATES } from '../data/equipment';
+import { PHASES, PHASE_NPK, getClimateScore } from '../data/phases';
 import PixelView from './PixelView';
 import PlantDetail from './PlantDetail';
 
@@ -20,7 +21,6 @@ function PlantingPanel({ roomId, potIndex, onClose }) {
 
   const [strainId, setStrainId] = useState(availableSeeds[0]?.id ?? null);
   const [subId,    setSubId]    = useState(availableSubs[0]?.id  ?? null);
-
   const canPlant = strainId && subId;
 
   function doPlant() {
@@ -35,48 +35,35 @@ function PlantingPanel({ roomId, potIndex, onClose }) {
         <div className="text-sm font-bold text-green-400">🌱 Samen einpflanzen</div>
         <button onClick={onClose} className="text-gray-600 hover:text-gray-300 text-lg px-1">✕</button>
       </div>
-      <div className="px-4 py-3 space-y-4">
-        <div className="text-xs text-gray-500">
-          {pot ? `${pot.name} — ${pot.liters}L` : `Topf ${potIndex + 1}`}
-        </div>
-
+      <div className="px-4 py-3 space-y-3">
+        <div className="text-xs text-gray-500">{pot ? `${pot.name} — ${pot.liters}L` : `Topf ${potIndex + 1}`}</div>
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Sorte wählen</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1.5">Sorte</div>
           {availableSeeds.length === 0 ? (
-            <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded p-2">
-              Keine Samen im Inventar — kaufe Samen im Shop.
-            </div>
+            <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded p-2">Keine Samen im Inventar.</div>
           ) : (
-            <div className="space-y-1 max-h-48 overflow-y-auto">
+            <div className="space-y-1 max-h-44 overflow-y-auto">
               {availableSeeds.map(s => (
                 <button key={s.id} onClick={() => setStrainId(s.id)}
-                  className={`w-full text-left px-3 py-2 rounded border text-xs transition-colors ${
-                    strainId === s.id ? 'border-green-600 bg-green-900/30' : 'border-gray-800 hover:border-gray-600 bg-gray-800/50'
-                  }`}>
+                  className={`w-full text-left px-3 py-2 rounded border text-xs transition-colors ${strainId === s.id ? 'border-green-600 bg-green-900/30' : 'border-gray-800 hover:border-gray-600 bg-gray-800/50'}`}>
                   <div className="flex justify-between">
                     <span style={{ color: s.color }} className="font-bold">{s.name}</span>
                     <span className="text-gray-500">{inventory.seeds[s.id]}×</span>
                   </div>
-                  <div className="text-gray-500 mt-0.5">{s.desc} · {s.type === 'auto' ? 'Auto' : 'Foto'}{s.isHybrid ? ' · F1' : ''}</div>
                 </button>
               ))}
             </div>
           )}
         </div>
-
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Substrat wählen</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1.5">Substrat</div>
           {availableSubs.length === 0 ? (
-            <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded p-2">
-              Kein passendes Substrat (benötigt {pot?.liters ?? '?'}L).
-            </div>
+            <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded p-2">Kein Substrat (benötigt {pot?.liters ?? '?'}L).</div>
           ) : (
             <div className="space-y-1">
               {availableSubs.map(s => (
                 <button key={s.id} onClick={() => setSubId(s.id)}
-                  className={`w-full text-left px-3 py-2 rounded border text-xs transition-colors ${
-                    subId === s.id ? 'border-amber-700 bg-amber-900/20' : 'border-gray-800 hover:border-gray-600 bg-gray-800/50'
-                  }`}>
+                  className={`w-full text-left px-3 py-2 rounded border text-xs transition-colors ${subId === s.id ? 'border-amber-700 bg-amber-900/20' : 'border-gray-800 hover:border-gray-600 bg-gray-800/50'}`}>
                   <div className="flex justify-between">
                     <span className="text-amber-300">{s.name}</span>
                     <span className="text-gray-500">{inventory.substrate[s.id]}L</span>
@@ -86,19 +73,207 @@ function PlantingPanel({ roomId, potIndex, onClose }) {
             </div>
           )}
         </div>
-
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 text-xs py-2 rounded border border-gray-700 text-gray-400 hover:text-gray-200">
-            Abbrechen
-          </button>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 text-xs py-2 rounded border border-gray-700 text-gray-400 hover:text-gray-200">Abbrechen</button>
           <button onClick={doPlant} disabled={!canPlant}
-            className={`flex-1 text-xs py-2 rounded font-bold transition-colors ${
-              canPlant ? 'bg-green-800 hover:bg-green-700 text-white' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
-            }`}>
+            className={`flex-1 text-xs py-2 rounded font-bold transition-colors ${canPlant ? 'bg-green-800 hover:bg-green-700 text-white' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>
             Einpflanzen
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Climate Gauge ────────────────────────────────────────
+function Gauge({ value, min, max, optMin, optMax, label, unit, color }) {
+  const range = max - min;
+  const pct       = Math.max(0, Math.min(100, ((value - min) / range) * 100));
+  const optMinPct = ((optMin - min) / range) * 100;
+  const optMaxPct = ((optMax - min) / range) * 100;
+  const inRange   = value >= optMin && value <= optMax;
+  return (
+    <div className="space-y-0.5">
+      <div className="flex justify-between text-xs">
+        <span className="text-gray-500">{label}</span>
+        <span className={inRange ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{value.toFixed(1)}{unit}</span>
+      </div>
+      <div className="relative h-2.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className="absolute top-0 h-full bg-green-900/60" style={{ left:`${optMinPct}%`, width:`${optMaxPct-optMinPct}%` }} />
+        <div className="absolute top-0 h-full w-2 rounded-full -ml-1 transition-all duration-500" style={{ left:`${pct}%`, background: inRange ? color : '#ef4444' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── NPK bar ──────────────────────────────────────────────
+function NPKBar({ label, value, max = 10, color }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-gray-500 w-3">{label}</span>
+      <div className="flex-1 h-1.5 bg-gray-800 rounded">
+        <div className="h-full rounded" style={{ width:`${Math.min(100,(value/max)*100)}%`, background:color }} />
+      </div>
+      <span className="text-xs text-gray-500 w-3 text-right">{value}</span>
+    </div>
+  );
+}
+
+// ── Expanded room climate + controls ─────────────────────
+function RoomControls({ room, plants }) {
+  const setRoomLampHours     = useGameStore(s => s.setRoomLampHours);
+  const setRoomLampIntensity = useGameStore(s => s.setRoomLampIntensity);
+  const setRoomExhaustSpeed  = useGameStore(s => s.setRoomExhaustSpeed);
+  const [open, setOpen]      = useState(false);
+
+  const { lamp, exhaust, lampHours, lampIntensity, exhaustSpeed, climate, controller, drip } = room;
+  const isAuto    = controller?.autoClimate;
+  const tempOk    = climate.temperature >= 18 && climate.temperature <= 28;
+  const humOk     = climate.humidity    >= 35 && climate.humidity    <= 70;
+  const roomPlants = plants.filter(p => p.roomId === room.id && !['drying','curing','ready'].includes(p.phase));
+  const uniquePhases = [...new Set(roomPlants.map(p => p.phase))];
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+      {/* Summary bar — always visible */}
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-gray-800/40 transition-colors">
+        <div className="text-xs text-gray-500 uppercase tracking-wide">
+          Klima &amp; Steuerung — <span className="text-gray-400">{room.tent?.name ?? 'Kein Zelt'}</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <span className={tempOk ? 'text-orange-400' : 'text-red-400'}>{climate.temperature.toFixed(1)}°C</span>
+          <span className={humOk  ? 'text-blue-400'   : 'text-yellow-400'}>{climate.humidity.toFixed(1)}%</span>
+          <span className="text-yellow-400">{climate.lightHours}h</span>
+          {drip       && <span className="text-blue-300  bg-blue-900/30  border border-blue-800/50  px-1.5 rounded">💧</span>}
+          {controller && <span className="text-green-300 bg-green-900/30 border border-green-800/50 px-1.5 rounded">🤖</span>}
+          <span className="text-gray-600 ml-1">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-gray-800 px-4 pb-5 pt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+          {/* Col 1: Gauges */}
+          <div className="space-y-4">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">Klima-Werte</div>
+            <Gauge value={climate.temperature} min={10} max={45} optMin={18} optMax={28} label="Temperatur"     unit="°C" color="#f97316" />
+            <Gauge value={climate.humidity}    min={10} max={95} optMin={40} optMax={70} label="Luftfeuchtigkeit" unit="%" color="#60a5fa" />
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Licht</span>
+              <span className="text-yellow-400">{climate.lightHours}h/Tag</span>
+            </div>
+            {lamp && (
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">PPFD (effektiv)</span>
+                <span className="text-yellow-300">{(climate.effectivePPFD ?? 0).toFixed(2)}×</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs pt-1 border-t border-gray-800">
+              <span className="text-gray-500">Strom/Tag</span>
+              <span className="text-red-400 font-bold">
+                {(((lamp?.watt ?? 0) * (lampIntensity / 100) * lampHours +
+                   (exhaust?.watt ?? 0) * (exhaustSpeed / 100) * 24 +
+                   (room.fan?.watt ?? 0) * 24) / 1000 * 0.35).toFixed(2)} €
+              </span>
+            </div>
+          </div>
+
+          {/* Col 2: Controls */}
+          <div className="space-y-4">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">Steuerung</div>
+            {/* Lamp */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">💡 {lamp?.name ?? 'Keine Lampe'}</span>
+                <span className={lampHours <= 12 ? 'text-pink-400' : 'text-yellow-400'}>
+                  {lampHours}h{lampHours === 0 ? ' (aus)' : lampHours <= 12 ? ' Blüte' : ' Veg'}
+                </span>
+              </div>
+              <input type="range" min="0" max="24" step="1" value={lampHours}
+                onChange={e => setRoomLampHours(room.id, e.target.value)}
+                disabled={!lamp || isAuto} className="w-full accent-yellow-500" />
+              {lamp?.dimmable && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-500 shrink-0">Intensität {lampIntensity}%</span>
+                  <input type="range" min="10" max="100" step="5" value={lampIntensity}
+                    onChange={e => setRoomLampIntensity(room.id, e.target.value)}
+                    className="flex-1 accent-green-500" />
+                </div>
+              )}
+            </div>
+            {/* Exhaust */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">🌀 {exhaust?.name ?? 'Kein Abluftlüfter'}</span>
+                <span className="text-blue-400">{exhaustSpeed}%</span>
+              </div>
+              <input type="range" min="0" max="100" step="5" value={exhaustSpeed}
+                onChange={e => setRoomExhaustSpeed(room.id, e.target.value)}
+                disabled={!exhaust || isAuto} className="w-full accent-blue-500" />
+            </div>
+            {/* Automation */}
+            <div className="space-y-1.5 text-xs">
+              {drip ? (
+                <div className="flex items-center gap-1.5 bg-blue-900/20 border border-blue-800/40 rounded px-2 py-1">
+                  💧 <span className="text-blue-300">{drip.name} — alle {drip.waterEvery}d</span>
+                </div>
+              ) : (
+                <div className="bg-gray-800/60 border border-gray-700 rounded px-2 py-1 text-gray-500">
+                  💧 Manuell gießen täglich!
+                </div>
+              )}
+              {controller ? (
+                <div className="flex items-center gap-1.5 bg-green-900/20 border border-green-800/40 rounded px-2 py-1">
+                  🤖 <span className="text-green-300">{controller.name}{isAuto ? ' — Auto-Abluft' : ''}</span>
+                </div>
+              ) : (
+                <div className="bg-gray-800/60 border border-gray-700 rounded px-2 py-1 text-gray-500">
+                  🤖 Kein Controller
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Col 3: Phase NPK */}
+          {uniquePhases.length > 0 && (
+            <div className="space-y-3">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">NPK-Bedarf aktiver Phasen</div>
+              {uniquePhases.map(phaseId => {
+                const phase = PHASES[phaseId];
+                const npk   = PHASE_NPK[phaseId];
+                const score = getClimateScore(climate, phaseId);
+                if (!phase) return null;
+                return (
+                  <div key={phaseId} className="bg-gray-800/50 rounded p-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{phase.icon}</span>
+                        <span className="text-xs font-bold" style={{ color: phase.color }}>{phase.label}</span>
+                      </div>
+                      <div className="text-xs font-bold px-1.5 py-0.5 rounded"
+                        style={{
+                          background: score > 80 ? '#14532d' : score > 50 ? '#713f12' : '#450a0a',
+                          color:      score > 80 ? '#86efac' : score > 50 ? '#fde68a' : '#fca5a5',
+                        }}>
+                        {score.toFixed(0)}%
+                      </div>
+                    </div>
+                    {npk && (
+                      <div className="space-y-1">
+                        <NPKBar label="N" value={npk.n} max={10} color="#22c55e" />
+                        <NPKBar label="P" value={npk.p} max={10} color="#f97316" />
+                        <NPKBar label="K" value={npk.k} max={10} color="#a78bfa" />
+                        <div className="text-xs text-gray-600 italic mt-0.5">{npk.tip}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -108,9 +283,9 @@ function ReadyBanner({ plants, onSelect }) {
   const ready = plants.filter(p => p.phase === 'ready');
   if (ready.length === 0) return null;
   return (
-    <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-3 flex items-center justify-between">
+    <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-3 flex items-center justify-between flex-wrap gap-2">
       <div className="text-xs text-cyan-300 font-bold">{ready.length}× Ernte verkaufsbereit!</div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {ready.map(p => (
           <button key={p.id} onClick={() => onSelect(p.id)}
             className="text-xs bg-cyan-800/50 hover:bg-cyan-700/50 border border-cyan-700 text-cyan-300 px-3 py-1 rounded font-bold">
@@ -118,124 +293,6 @@ function ReadyBanner({ plants, onSelect }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── Inline climate & automation controls ─────────────────
-function RoomControls({ room }) {
-  const setRoomLampHours     = useGameStore(s => s.setRoomLampHours);
-  const setRoomLampIntensity = useGameStore(s => s.setRoomLampIntensity);
-  const setRoomExhaustSpeed  = useGameStore(s => s.setRoomExhaustSpeed);
-  const [open, setOpen]      = useState(false);
-
-  const { lamp, exhaust, lampHours, lampIntensity, exhaustSpeed, climate, controller, drip } = room;
-  const isAuto = controller?.autoClimate;
-
-  const tempOk = climate.temperature >= 18 && climate.temperature <= 28;
-  const humOk  = climate.humidity    >= 35 && climate.humidity    <= 70;
-
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-gray-800/40 transition-colors"
-      >
-        <div className="text-xs text-gray-500 uppercase tracking-wide">Klima &amp; Steuerung</div>
-        <div className="flex items-center gap-3 text-xs">
-          <span className={tempOk ? 'text-orange-400' : 'text-red-400'}>
-            {climate.temperature.toFixed(1)}°C
-          </span>
-          <span className={humOk ? 'text-blue-400' : 'text-yellow-400'}>
-            {climate.humidity.toFixed(1)}%
-          </span>
-          <span className="text-yellow-400">{climate.lightHours}h</span>
-          {drip       && <span className="text-blue-300 bg-blue-900/30 border border-blue-800/50 px-1.5 rounded">💧 AUTO</span>}
-          {controller && <span className="text-green-300 bg-green-900/30 border border-green-800/50 px-1.5 rounded">🤖 {isAuto ? 'SMART' : 'TIMER'}</span>}
-          <span className="text-gray-600 ml-1">{open ? '▲' : '▼'}</span>
-        </div>
-      </button>
-
-      {open && (
-        <div className="px-4 pb-4 pt-2 border-t border-gray-800 space-y-4">
-
-          {/* Lamp */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400">
-                💡 {lamp?.name ?? 'Keine Lampe'}
-                {lamp && <span className="text-gray-600 ml-1">· {lamp.watt}W{lamp.dimmable ? ' · dimmbar' : ''}</span>}
-              </span>
-              <span className={lampHours <= 12 ? 'text-pink-400' : 'text-yellow-400'}>
-                {lampHours}h / {24 - lampHours}h
-                {lampHours === 0 ? ' (aus)' : lampHours <= 12 ? ' (Blüte)' : ' (Veg)'}
-              </span>
-            </div>
-            <input type="range" min="0" max="24" step="1"
-              value={lampHours}
-              onChange={e => setRoomLampHours(room.id, e.target.value)}
-              disabled={!lamp || isAuto}
-              className="w-full accent-yellow-500"
-            />
-            {lamp?.dimmable && (
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-500 shrink-0 w-24">Intensität {lampIntensity}%</span>
-                <input type="range" min="10" max="100" step="5"
-                  value={lampIntensity}
-                  onChange={e => setRoomLampIntensity(room.id, e.target.value)}
-                  className="flex-1 accent-green-500"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Exhaust */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400">🌀 {exhaust?.name ?? 'Kein Abluftlüfter'}</span>
-              <span className="text-blue-400">{exhaustSpeed}%</span>
-            </div>
-            <input type="range" min="0" max="100" step="5"
-              value={exhaustSpeed}
-              onChange={e => setRoomExhaustSpeed(room.id, e.target.value)}
-              disabled={!exhaust || isAuto}
-              className="w-full accent-blue-500"
-            />
-          </div>
-
-          {/* Automation status */}
-          <div className="flex flex-wrap gap-2 text-xs">
-            {drip ? (
-              <div className="flex items-center gap-1.5 bg-blue-900/20 border border-blue-800/40 rounded px-2 py-1">
-                <span>💧</span>
-                <span className="text-blue-300">{drip.name} — alle {drip.waterEvery} Tag(e)</span>
-              </div>
-            ) : (
-              <div className="bg-gray-800/60 border border-gray-700 rounded px-2 py-1 text-gray-500">
-                💧 Manuell gießen — täglich erforderlich!
-              </div>
-            )}
-            {controller ? (
-              <div className="flex items-center gap-1.5 bg-green-900/20 border border-green-800/40 rounded px-2 py-1">
-                <span>🤖</span>
-                <span className="text-green-300">
-                  {controller.name}{isAuto ? ' — Abluft automatisch' : ' — Zeitsteuerung aktiv'}
-                </span>
-              </div>
-            ) : (
-              <div className="bg-gray-800/60 border border-gray-700 rounded px-2 py-1 text-gray-500">
-                🤖 Kein Controller
-              </div>
-            )}
-          </div>
-
-          {isAuto && (
-            <div className="text-xs text-gray-600 italic">
-              Smart-Controller regelt Abluft auf Ziel 24°C. Lampe weiterhin manuell.
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -260,8 +317,13 @@ export default function GrowRoom() {
   }
 
   function handleEmptyPotClick(roomId, potIndex) {
+    setActiveRoom(roomId);
     setSelectedPlantId(null);
-    setPlantingPot(plantingPot?.roomId === roomId && plantingPot?.potIndex === potIndex ? null : { roomId, potIndex });
+    setPlantingPot(
+      plantingPot?.roomId === roomId && plantingPot?.potIndex === potIndex
+        ? null
+        : { roomId, potIndex }
+    );
   }
 
   function closePanel() {
@@ -269,56 +331,90 @@ export default function GrowRoom() {
     setPlantingPot(null);
   }
 
-  const roomPlants = plants.filter(p => p.roomId === activeRoomId);
+  const panelOpen = !!(selectedPlantId || plantingPot);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
 
-      {/* Room / tent tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {rooms.map(r => (
-          <button key={r.id} onClick={() => { setActiveRoom(r.id); closePanel(); }}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono transition-colors border ${
-              r.id === activeRoomId ? 'bg-green-900/50 border-green-700 text-green-400' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
-            }`}>
-            <span>{r.tent ? '🏕️' : '🔲'}</span>
-            <span>{r.tent?.name ?? 'Leeres Zelt'}</span>
-            <span className="text-gray-600">
-              {plants.filter(p => p.roomId === r.id && !['ready'].includes(p.phase)).length}/{r.tent?.maxPlants ?? 0}
-            </span>
-            {rooms.length > 1 && r.id === activeRoomId && (
-              <button onClick={e => { e.stopPropagation(); removeRoom(r.id); }}
-                className="text-gray-600 hover:text-red-500 ml-1">✕</button>
-            )}
-          </button>
-        ))}
-        <button onClick={addRoom}
-          className="px-3 py-1.5 rounded text-xs font-mono border border-dashed border-gray-700 text-gray-500 hover:text-green-400 hover:border-green-700 transition-colors">
-          + Neues Zelt
-        </button>
-      </div>
-
       {/* Ready-to-sell banner */}
       <ReadyBanner plants={plants} onSelect={handlePlantClick} />
 
-      {/* Pixel view + side panel */}
+      {/* All tents + optional side panel */}
       <div className="flex gap-4 items-start">
-        <div className="flex-1 overflow-x-auto">
-          <PixelView
-            room={activeRoom}
-            plants={roomPlants}
-            onPlantClick={handlePlantClick}
-            onEmptyPotClick={handleEmptyPotClick}
-          />
-          {!activeRoom?.tent && (
-            <div className="mt-4 text-center text-gray-500 text-xs">Kaufe ein Zelt im Shop.</div>
-          )}
-          {activeRoom?.tent && activeRoom.pots.length === 0 && (
-            <div className="mt-4 text-center text-gray-500 text-xs">Keine Töpfe — kaufe Töpfe im Shop.</div>
-          )}
+
+        {/* All tents side-by-side (proportional sizes) */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap gap-5 items-start">
+            {rooms.map(room => {
+              const isActive = room.id === activeRoomId;
+              const roomPlants = plants.filter(p => p.roomId === room.id);
+              const activeCount = roomPlants.filter(p => !['ready'].includes(p.phase)).length;
+              const dryCount = roomPlants.filter(p => !['drying','curing','ready'].includes(p.phase) && (p.daysUnwatered ?? 0) > 0).length;
+
+              return (
+                <div
+                  key={room.id}
+                  onClick={() => setActiveRoom(room.id)}
+                  className={`cursor-pointer transition-all rounded-lg overflow-hidden ${
+                    isActive
+                      ? 'ring-2 ring-green-500/70 shadow-lg shadow-green-900/30'
+                      : 'ring-1 ring-gray-800 hover:ring-gray-600'
+                  }`}
+                >
+                  {/* Tent header */}
+                  <div className={`px-3 py-2 flex items-center justify-between text-xs ${isActive ? 'bg-green-900/30' : 'bg-gray-900'}`}>
+                    <div className="flex items-center gap-2">
+                      <span>{room.tent ? '🏕️' : '🔲'}</span>
+                      <span className={isActive ? 'text-green-400 font-bold' : 'text-gray-400'}>
+                        {room.tent?.name ?? 'Leeres Zelt'}
+                      </span>
+                      <span className="text-gray-600">{activeCount}/{room.tent?.maxPlants ?? 0}</span>
+                      {dryCount > 0 && <span className="text-yellow-400">💧{dryCount}</span>}
+                    </div>
+                    {rooms.length > 1 && (
+                      <button
+                        onClick={e => { e.stopPropagation(); removeRoom(room.id); }}
+                        className="text-gray-700 hover:text-red-500 ml-2 transition-colors"
+                      >✕</button>
+                    )}
+                  </div>
+
+                  {/* Pixel grid */}
+                  <PixelView
+                    room={room}
+                    plants={roomPlants}
+                    onPlantClick={handlePlantClick}
+                    onEmptyPotClick={handleEmptyPotClick}
+                    isActive={isActive}
+                  />
+
+                  {!room.tent && (
+                    <div className="px-3 py-3 text-center text-gray-600 text-xs bg-gray-900">
+                      Kein Zelt — Shop
+                    </div>
+                  )}
+                  {room.tent && room.pots.length === 0 && (
+                    <div className="px-3 py-2 text-center text-gray-600 text-xs bg-gray-900">
+                      Keine Töpfe
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Add tent button */}
+            <button
+              onClick={addRoom}
+              className="flex flex-col items-center justify-center gap-2 w-28 h-28 rounded-lg border-2 border-dashed border-gray-700 text-gray-600 hover:text-green-500 hover:border-green-700 transition-colors"
+            >
+              <span className="text-2xl">+</span>
+              <span className="text-xs">Neues Zelt</span>
+            </button>
+          </div>
         </div>
 
-        {(selectedPlantId || plantingPot) && (
+        {/* Side panel */}
+        {panelOpen && (
           <div className="w-72 shrink-0">
             {selectedPlantId && <PlantDetail plantId={selectedPlantId} onClose={closePanel} />}
             {plantingPot && !selectedPlantId && (
@@ -328,8 +424,10 @@ export default function GrowRoom() {
         )}
       </div>
 
-      {/* Climate & automation panel (always shown when tent exists) */}
-      {activeRoom && <RoomControls room={activeRoom} />}
+      {/* Climate & controls for active room */}
+      {activeRoom && (
+        <RoomControls room={activeRoom} plants={plants} />
+      )}
     </div>
   );
 }
