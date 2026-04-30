@@ -255,12 +255,31 @@ export default function Overview({ setTab }) {
         </div>
       )}
 
-      {/* Per-room climate */}
+      {/* Per-room climate — compact summary strip */}
       {roomsWithClimate.length > 0 && (
-        <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-3">Klima pro Zimmer</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rooms.map(r => <RoomClimateCard key={r.id} room={r} plants={plants} />)}
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">Klima</div>
+            <button onClick={() => setTab('growroom')} className="text-xs text-green-400 hover:text-green-300 underline underline-offset-2">
+              Grow Room →
+            </button>
+          </div>
+          <div className="space-y-2">
+            {roomsWithClimate.map(r => {
+              const { climate } = r;
+              const tempOk = climate.temperature >= 18 && climate.temperature <= 28;
+              const humOk  = climate.humidity    >= 35 && climate.humidity    <= 70;
+              return (
+                <div key={r.id} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400">{r.tent?.name ?? 'Zimmer'}</span>
+                  <div className="flex items-center gap-4">
+                    <span className={tempOk ? 'text-orange-400' : 'text-red-400'}>{climate.temperature.toFixed(1)}°C</span>
+                    <span className={humOk  ? 'text-blue-400'  : 'text-yellow-400'}>{climate.humidity.toFixed(1)}%</span>
+                    <span className="text-yellow-400">{climate.lightHours}h</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

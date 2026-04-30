@@ -1,10 +1,14 @@
 import { useGameStore } from '../store/gameStore';
 
-export default function StartScreen() {
+export default function StartScreen({ hasSave, savedDay }) {
   const startGame = useGameStore(s => s.startGame);
   const resetGame = useGameStore(s => s.resetGame);
 
-  function handleStart() {
+  function handleContinue() {
+    startGame();
+  }
+
+  function handleNewGame() {
     resetGame();
     setTimeout(() => startGame(), 50);
   }
@@ -47,12 +51,29 @@ export default function StartScreen() {
           </div>
         </div>
 
-        <button
-          onClick={handleStart}
-          className="bg-green-700 hover:bg-green-600 text-white font-bold px-10 py-3 rounded-lg tracking-widest uppercase text-sm transition-colors shadow-lg shadow-green-900/50"
-        >
-          Spiel starten
-        </button>
+        {hasSave ? (
+          <div className="space-y-3">
+            <button
+              onClick={handleContinue}
+              className="w-full bg-green-700 hover:bg-green-600 text-white font-bold px-10 py-3 rounded-lg tracking-widest uppercase text-sm transition-colors shadow-lg shadow-green-900/50"
+            >
+              Fortsetzen (Tag {savedDay})
+            </button>
+            <button
+              onClick={handleNewGame}
+              className="w-full bg-transparent hover:bg-red-900/20 text-red-500 hover:text-red-400 border border-red-800/40 font-bold px-10 py-2.5 rounded-lg tracking-widest uppercase text-xs transition-colors"
+            >
+              Neues Spiel (Fortschritt löschen)
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleNewGame}
+            className="bg-green-700 hover:bg-green-600 text-white font-bold px-10 py-3 rounded-lg tracking-widest uppercase text-sm transition-colors shadow-lg shadow-green-900/50"
+          >
+            Spiel starten
+          </button>
+        )}
       </div>
     </div>
   );

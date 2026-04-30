@@ -14,48 +14,64 @@ import AuthScreen from './components/AuthScreen';
 export default function App() {
   const started     = useGameStore(s => s.started);
   const gameOver    = useGameStore(s => s.gameOver);
+  const day         = useGameStore(s => s.day);
   const user        = useGameStore(s => s.user);
   const setUser     = useGameStore(s => s.setUser);
   const loadGame    = useGameStore(s => s.loadGame);
   const saveStatus  = useGameStore(s => s.saveStatus);
 
-  const [tab, setTab]         = useState('overview');
+  const [tab, setTab]             = useState('overview');
   const [authReady, setAuthReady] = useState(false);
-  const [isGuest, setIsGuest] = useState(false);
+  const [loadingGame, setLoadingGame] = useState(false);
+  const [isGuest, setIsGuest]     = useState(false);
+  const [savedDay, setSavedDay]   = useState(null);
 
-  // Listen for Supabase auth state changes
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        loadGame();
+        setLoadingGame(true);
+        const loaded = await loadGame();
+        if (loaded) {
+          // savedDay is the day from the loaded state — read it after loadGame sets it
+          setSavedDay(useGameStore.getState().day);
+        }
+        setLoadingGame(false);
       }
       setAuthReady(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) loadGame();
+      if (u) {
+        setLoadingGame(true);
+        const loaded = await loadGame();
+        if (loaded) setSavedDay(useGameStore.getState().day);
+        setLoadingGame(false);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!authReady) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-green-400 text-sm animate-pulse">Laden…</div>
-      </div>
-    );
-  }
+  const spinner = (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="text-green-400 text-sm animate-pulse">Laden…</div>
+    </div>
+  );
+
+  if (!authReady || loadingGame) return spinner;
 
   if (!user && !isGuest) {
     return <AuthScreen onGuest={() => setIsGuest(true)} />;
   }
 
-  if (!started) return <StartScreen />;
-  if (gameOver)  return <GameOver />;
+  if (!started) {
+    const hasSave = savedDay !== null;
+    return <StartScreen hasSave={hasSave} savedDay={savedDay} />;
+  }
+  if (gameOver) return <GameOver />;
 
   return (
     <div className="min-h-screen bg-gray-950">

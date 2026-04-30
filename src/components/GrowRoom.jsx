@@ -66,7 +66,7 @@ function PlantingPanel({ roomId, potIndex, onClose }) {
                   className={`w-full text-left px-3 py-2 rounded border text-xs transition-colors ${subId === s.id ? 'border-amber-700 bg-amber-900/20' : 'border-gray-800 hover:border-gray-600 bg-gray-800/50'}`}>
                   <div className="flex justify-between">
                     <span className="text-amber-300">{s.name}</span>
-                    <span className="text-gray-500">{inventory.substrate[s.id]}L</span>
+                    <span className="text-gray-500">{(inventory.substrate[s.id] ?? 0)}L</span>
                   </div>
                 </button>
               ))}
@@ -125,6 +125,8 @@ function RoomControls({ room, plants }) {
   const setRoomLampIntensity = useGameStore(s => s.setRoomLampIntensity);
   const setRoomExhaustSpeed  = useGameStore(s => s.setRoomExhaustSpeed);
   const [open, setOpen]      = useState(false);
+
+  if (!room) return null;
 
   const { lamp, exhaust, lampHours, lampIntensity, exhaustSpeed, climate, controller, drip } = room;
   const isAuto    = controller?.autoClimate;
@@ -305,6 +307,7 @@ export default function GrowRoom() {
   const setActiveRoom = useGameStore(s => s.setActiveRoom);
   const addRoom       = useGameStore(s => s.addRoom);
   const removeRoom    = useGameStore(s => s.removeRoom);
+  const waterRoom     = useGameStore(s => s.waterRoom);
 
   const [selectedPlantId, setSelectedPlantId] = useState(null);
   const [plantingPot,     setPlantingPot]      = useState(null);
@@ -350,6 +353,9 @@ export default function GrowRoom() {
               const roomPlants = plants.filter(p => p.roomId === room.id);
               const activeCount = roomPlants.filter(p => !['ready'].includes(p.phase)).length;
               const dryCount = roomPlants.filter(p => !['drying','curing','ready'].includes(p.phase) && (p.daysUnwatered ?? 0) > 0).length;
+              const waterableCount = roomPlants.filter(p =>
+                !p.wateredToday && !['drying','curing','ready','harvest_ready','clone_rooting'].includes(p.phase)
+              ).length;
 
               return (
                 <div
@@ -371,22 +377,35 @@ export default function GrowRoom() {
                       <span className="text-gray-600">{activeCount}/{room.tent?.maxPlants ?? 0}</span>
                       {dryCount > 0 && <span className="text-yellow-400">💧{dryCount}</span>}
                     </div>
-                    {rooms.length > 1 && (
-                      <button
-                        onClick={e => { e.stopPropagation(); removeRoom(room.id); }}
-                        className="text-gray-700 hover:text-red-500 ml-2 transition-colors"
-                      >✕</button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {waterableCount > 0 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); waterRoom(room.id); }}
+                          className="text-xs bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700/50 text-blue-300 px-2 py-0.5 rounded transition-colors"
+                          title="Alle Pflanzen gießen"
+                        >
+                          💧 Alle
+                        </button>
+                      )}
+                      {rooms.length > 1 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); removeRoom(room.id); }}
+                          className="text-gray-700 hover:text-red-500 ml-2 transition-colors"
+                        >✕</button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Pixel grid */}
-                  <PixelView
-                    room={room}
-                    plants={roomPlants}
-                    onPlantClick={handlePlantClick}
-                    onEmptyPotClick={handleEmptyPotClick}
-                    isActive={isActive}
-                  />
+                  <div className="overflow-x-auto">
+                    <PixelView
+                      room={room}
+                      plants={roomPlants}
+                      onPlantClick={handlePlantClick}
+                      onEmptyPotClick={handleEmptyPotClick}
+                      isActive={isActive}
+                    />
+                  </div>
 
                   {!room.tent && (
                     <div className="px-3 py-3 text-center text-gray-600 text-xs bg-gray-900">

@@ -9,6 +9,7 @@ export const GAME_DAY_MS = 8 * 60 * 1000;
 let _plantCounter = 0;
 let _hybridCounter = 0;
 let _roomCounter = 0;
+let _saveStatusTimeout = null;
 
 const newPlantId  = () => `plant_${++_plantCounter}`;
 const newRoomId   = () => `room_${++_roomCounter}`;
@@ -345,6 +346,23 @@ export const useGameStore = create((set, get) => ({
   removePlant(plantId) { set(s => ({ plants: s.plants.filter(p => p.id !== plantId) })); },
 
   // ── plant care ──────────────────────────────────────────
+  waterRoom(roomId) {
+    const { plants, _addNotification } = get();
+    const targets = plants.filter(p =>
+      p.roomId === roomId &&
+      !p.wateredToday &&
+      !['drying','curing','ready','harvest_ready','clone_rooting'].includes(p.phase)
+    );
+    if (targets.length === 0) { _addNotification('Alle Pflanzen bereits gegossen.', 'warn'); return; }
+    set(s => ({
+      plants: s.plants.map(p =>
+        targets.some(t => t.id === p.id)
+          ? { ...p, health: Math.min(100, p.health + 5), wateredToday: true }
+          : p
+      ),
+    }));
+    _addNotification(`${targets.length} Pflanze${targets.length > 1 ? 'n' : ''} gegossen! +5 HP`, 'success');
+  },
   waterPlant(plantId) {
     const { plants, _addNotification } = get();
     const plant = plants.find(p => p.id === plantId);
@@ -553,10 +571,6 @@ export const useGameStore = create((set, get) => ({
         if (p.quality < 20) p.health = Math.max(0, p.health - 2);
         p.phaseDay  += 1;
         p.totalDays += 1;
-        if (p.phase === 'vegetative' && p.type === 'photo' && !p.isMother && room?.lampHours <= 12) {
-          p.phase = 'flowering'; p.phaseDay = 0;
-          _addNotification(`${p.strainName} wechselt in Blüte!`, 'info');
-        }
       }
 
       p = advancePlantPhase(p, photoTrigger);
@@ -601,7 +615,8 @@ export const useGameStore = create((set, get) => ({
       { onConflict: 'user_id' },
     );
     set({ saveStatus: error ? 'error' : 'saved' });
-    setTimeout(() => set({ saveStatus: 'idle' }), 3000);
+    if (_saveStatusTimeout) clearTimeout(_saveStatusTimeout);
+    _saveStatusTimeout = setTimeout(() => set({ saveStatus: 'idle' }), 3000);
   },
 
   async loadGame() {
@@ -615,8 +630,9 @@ export const useGameStore = create((set, get) => ({
     if (error || !data) return false;
     const s = data.save_data;
     // Reset counters to avoid ID collisions
-    _plantCounter = Math.max(...(s.plants ?? []).map(p => parseInt(p.id.split('_')[1]) || 0), 0);
-    _roomCounter  = Math.max(...(s.rooms  ?? []).map(r => parseInt(r.id.split('_')[1]) || 0), 0);
+    _plantCounter   = Math.max(...(s.plants ?? []).map(p => parseInt(p.id.split('_')[1]) || 0), 0);
+    _roomCounter    = Math.max(...(s.rooms  ?? []).map(r => parseInt(r.id.split('_')[1]) || 0), 0);
+    _hybridCounter  = Math.max(...(s.customStrains ?? []).map(cs => parseInt(cs.id.split('_')[1]) || 0), 0);
     set({
       day: s.day ?? 1,
       money: s.money ?? 1000,

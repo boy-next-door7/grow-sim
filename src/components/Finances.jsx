@@ -65,7 +65,7 @@ export default function Finances() {
                   {room.lamp && (
                     <div className="flex justify-between text-xs pl-2">
                       <span className="text-gray-400">
-                        💡 {room.lamp.name} ({room.lampHours}h{room.lamp.dimmable ? ` · ${room.lampIntensity}%` : ''})
+                        💡 {room.lamp.name} ({room.lampHours}h{room.lamp?.dimmable ? ` · ${room.lampIntensity}%` : ''})
                       </span>
                       <span className="text-orange-400">
                         {((room.lamp.watt * (room.lampIntensity / 100) * room.lampHours / 1000) * 0.35).toFixed(2)} €
