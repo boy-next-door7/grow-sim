@@ -645,7 +645,7 @@ export const useGameStore = create((set, get) => ({
       totalSpent: s.totalSpent ?? 0,
       totalRevenue: s.totalRevenue ?? 0,
       electricityAccrued: s.electricityAccrued ?? 0,
-      started: s.started ?? false,
+      started: false, // always show StartScreen so user can explicitly resume via "Fortsetzen"
       gameOver: s.gameOver ?? false,
     });
     return true;

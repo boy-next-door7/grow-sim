@@ -317,11 +317,25 @@ export default function PlantDetail({ plantId, onClose }) {
         {/* Phase progress */}
         {!isPostHarv && !isHarvReady && (
           <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-500">Phasenfortschritt</span>
-              <span className="text-gray-400">Tag {plant.phaseDay}</span>
-            </div>
-            <Bar value={plant.phaseDay} max={20} color="#166534" height="h-1.5" />
+            {(() => {
+              const phaseMax = {
+                germination:   plant.germDays,
+                clone_rooting: 5,
+                seedling:      plant.seedlingDays,
+                vegetative:    plant.vegDays,
+                flowering:     Math.floor(plant.flowerDays * 0.75),
+                late_flower:   Math.ceil(plant.flowerDays * 0.25),
+              }[plant.phase] ?? Math.max(plant.phaseDay + 1, 1);
+              return (
+                <>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Phasenfortschritt</span>
+                    <span className="text-gray-400">Tag {plant.phaseDay}/{phaseMax}</span>
+                  </div>
+                  <Bar value={plant.phaseDay} max={phaseMax} color="#166534" height="h-1.5" />
+                </>
+              );
+            })()}
           </div>
         )}
 

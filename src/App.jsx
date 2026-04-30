@@ -14,7 +14,6 @@ import AuthScreen from './components/AuthScreen';
 export default function App() {
   const started     = useGameStore(s => s.started);
   const gameOver    = useGameStore(s => s.gameOver);
-  const day         = useGameStore(s => s.day);
   const user        = useGameStore(s => s.user);
   const setUser     = useGameStore(s => s.setUser);
   const loadGame    = useGameStore(s => s.loadGame);
@@ -41,10 +40,11 @@ export default function App() {
       setAuthReady(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) {
+      // SIGNED_IN fires when user logs in via AuthScreen; skip INITIAL_SESSION (handled by getSession above)
+      if (u && event === 'SIGNED_IN') {
         setLoadingGame(true);
         const loaded = await loadGame();
         if (loaded) setSavedDay(useGameStore.getState().day);
