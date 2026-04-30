@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { calcClimate, calcDailyElectricity } from '../utils/climate';
 import { getClimateScore, getNutrientMatchScore, PHASES } from '../data/phases';
 import { SEEDS, NUTRIENTS, TOOLS, SUBSTRATES, DRIP_SYSTEMS, CONTROLLERS } from '../data/equipment';
+import { supabase } from '../lib/supabase';
 
 export const GAME_DAY_MS = 8 * 60 * 1000;
 
@@ -139,6 +140,7 @@ function blendHex(a, b) {
 export const useGameStore = create((set, get) => ({
   started: false, gameOver: false,
   day: 1, money: 1000, tickerId: null, lastTick: null,
+  user: null, saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
 
   rooms: [{ ...INIT_ROOM }],
   activeRoomId: INIT_ROOM.id,
@@ -153,8 +155,8 @@ export const useGameStore = create((set, get) => ({
   // ── helpers ────────────────────────────────────────────
   _addNotification(msg, type = 'info') {
     const id = Date.now() + Math.random();
-    set(s => ({ notifications: [...s.notifications.slice(-9), { id, msg, type }] }));
-    setTimeout(() => set(s => ({ notifications: s.notifications.filter(n => n.id !== id) })), 5000);
+    const day = get().day;
+    set(s => ({ notifications: [...s.notifications.slice(-49), { id, msg, type, day }] }));
   },
   _addTransaction(desc, amount) {
     const { day, transactions, totalSpent, totalRevenue } = get();
@@ -474,6 +476,7 @@ export const useGameStore = create((set, get) => ({
     get()._tick();
     const id = setInterval(() => get()._tick(), GAME_DAY_MS);
     set({ tickerId: id, lastTick: Date.now() });
+    get().saveGame();
   },
 
   _tick() {
@@ -575,6 +578,61 @@ export const useGameStore = create((set, get) => ({
       lastTick: Date.now(),
     });
     if ((day + 1) % 30 === 0) _addNotification(`Tag ${day + 1}: Monat abgeschlossen.`, 'info');
+    // Auto-save every 5 days
+    if ((day + 1) % 5 === 0) get().saveGame();
+  },
+
+  setUser(user) { set({ user }); },
+
+  async saveGame() {
+    const { user } = get();
+    if (!user) return;
+    set({ saveStatus: 'saving' });
+    const { day, money, plants, rooms, inventory, customStrains,
+            transactions, totalSpent, totalRevenue, electricityAccrued, started, gameOver } = get();
+    const save_data = {
+      day, money, plants, rooms, inventory, customStrains,
+      transactions: transactions.slice(-50),
+      totalSpent, totalRevenue, electricityAccrued, started, gameOver,
+      savedAt: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('game_saves').upsert(
+      { user_id: user.id, save_data, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+    set({ saveStatus: error ? 'error' : 'saved' });
+    setTimeout(() => set({ saveStatus: 'idle' }), 3000);
+  },
+
+  async loadGame() {
+    const { user } = get();
+    if (!user) return false;
+    const { data, error } = await supabase
+      .from('game_saves')
+      .select('save_data')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error || !data) return false;
+    const s = data.save_data;
+    // Reset counters to avoid ID collisions
+    _plantCounter = Math.max(...(s.plants ?? []).map(p => parseInt(p.id.split('_')[1]) || 0), 0);
+    _roomCounter  = Math.max(...(s.rooms  ?? []).map(r => parseInt(r.id.split('_')[1]) || 0), 0);
+    set({
+      day: s.day ?? 1,
+      money: s.money ?? 1000,
+      plants: s.plants ?? [],
+      rooms: s.rooms ?? [],
+      activeRoomId: s.rooms?.[0]?.id ?? null,
+      inventory: s.inventory ?? { seeds: {}, substrate: {}, nutrients: {}, tools: [] },
+      customStrains: s.customStrains ?? [],
+      transactions: s.transactions ?? [],
+      totalSpent: s.totalSpent ?? 0,
+      totalRevenue: s.totalRevenue ?? 0,
+      electricityAccrued: s.electricityAccrued ?? 0,
+      started: s.started ?? false,
+      gameOver: s.gameOver ?? false,
+    });
+    return true;
   },
 
   resetGame() {

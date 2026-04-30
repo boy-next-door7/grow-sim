@@ -8,13 +8,14 @@ function formatCountdown(ms) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function Header({ tab, setTab }) {
+export default function Header({ tab, setTab, saveStatus, user }) {
   const day = useGameStore(s => s.day);
   const money = useGameStore(s => s.money);
   const started = useGameStore(s => s.started);
   const plants = useGameStore(s => s.plants);
   const lastTick = useGameStore(s => s.lastTick);
   const endDay = useGameStore(s => s.endDay);
+  const saveGame = useGameStore(s => s.saveGame);
 
   const [remaining, setRemaining] = useState(GAME_DAY_MS);
 
@@ -43,10 +44,13 @@ export default function Header({ tab, setTab }) {
     <header className="sticky top-0 z-40 bg-gray-950 border-b border-green-900/50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
-          {/* Logo */}
+          {/* Logo + user */}
           <div className="flex items-center gap-3">
             <span className="text-green-400 text-xl">🌿</span>
             <span className="text-green-400 font-bold tracking-widest text-sm uppercase">GrowSim</span>
+            {user && (
+              <span className="hidden md:block text-xs text-gray-600 truncate max-w-[120px]">{user.email}</span>
+            )}
           </div>
 
           {/* Stats + Countdown */}
@@ -72,6 +76,22 @@ export default function Header({ tab, setTab }) {
                   {formatCountdown(remaining)}
                 </span>
               </div>
+
+              {/* Save status */}
+              {user && saveStatus !== 'idle' && (
+                <span className={`text-xs px-2 py-1 rounded hidden sm:inline ${
+                  saveStatus === 'saving' ? 'text-gray-500' :
+                  saveStatus === 'saved'  ? 'text-green-500' : 'text-red-400'
+                }`}>
+                  {saveStatus === 'saving' ? '💾…' : saveStatus === 'saved' ? '✓ Gespeichert' : '✗ Fehler'}
+                </span>
+              )}
+              {user && saveStatus === 'idle' && (
+                <button onClick={saveGame} title="Manuell speichern"
+                  className="text-xs text-gray-600 hover:text-green-400 px-1 transition-colors hidden sm:inline">
+                  💾
+                </button>
+              )}
 
               {/* End Day Button */}
               <button

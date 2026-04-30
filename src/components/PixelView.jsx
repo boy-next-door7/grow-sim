@@ -99,8 +99,8 @@ const PHASE_LABELS = {
   curing:'CURING', ready:'FERTIG',
 };
 
-function PlantTile({ plant, size, onClick }) {
-  const px         = size >= 80 ? 6 : 5;
+function PlantTile({ plant, size, spritePx, onClick }) {
+  const px         = spritePx ?? (size >= 80 ? 6 : 5);
   const color      = plant.strainColor || '#86efac';
   const budStyle   = getBudStyle(plant);
   const animClass  = PHASE_ANIM[plant.phase] ?? '';
@@ -188,10 +188,20 @@ export default function PixelView({ room, plants, onPlantClick, onEmptyPotClick 
   const maxPlants = tent.maxPlants;
   const cols      = maxPlants <= 1 ? 1 : maxPlants <= 2 ? 2 : maxPlants <= 4 ? 2 : maxPlants <= 9 ? 3 : 4;
   const rows      = Math.ceil(maxPlants / cols);
-  // Larger tents get larger tiles so overall visual size scales proportionally
-  const tileSize  = maxPlants <= 2 ? 88 : maxPlants <= 4 ? 80 : maxPlants <= 9 ? 72 : 64;
   const totalCols = cols + 2;
   const totalRows = rows + 2;
+
+  // Proportional tile sizes: tent_120 (120cm) should be 3× wider than tent_40 (40cm)
+  // Widths: tent_40≈220px, tent_60≈342px (1.56×), tent_80≈438px (2×),
+  //         tent_100≈548px (2.49×), tent_120≈668px (3×)
+  const TENT_SIZES = {
+    tent_40:  { tileSize: 72,  spritePx: 5 },
+    tent_60:  { tileSize: 84,  spritePx: 5 },
+    tent_80:  { tileSize: 108, spritePx: 6 },
+    tent_100: { tileSize: 108, spritePx: 7 },
+    tent_120: { tileSize: 132, spritePx: 8 },
+  };
+  const { tileSize, spritePx } = TENT_SIZES[tent.id] ?? { tileSize: 80, spritePx: 5 };
 
   const lampColor = !room.lamp ? '#333'
     : room.lamp.id?.startsWith('led') ? '#4ade80'
@@ -233,7 +243,7 @@ export default function PixelView({ room, plants, onPlantClick, onEmptyPotClick 
             const si   = (r-1)*cols + (c-1);
             const slot = slots[si];
             if (!slot) return <NoSlotTile key={key} size={tileSize} />;
-            if (slot.plant) return <PlantTile key={key} plant={slot.plant} size={tileSize} onClick={() => onPlantClick(slot.plant.id)} />;
+            if (slot.plant) return <PlantTile key={key} plant={slot.plant} size={tileSize} spritePx={spritePx} onClick={() => onPlantClick(slot.plant.id)} />;
             if (slot.hasPot) return <EmptyPotTile key={key} size={tileSize} potIndex={slot.index} onClick={() => onEmptyPotClick(room.id, slot.index)} />;
             return <NoSlotTile key={key} size={tileSize} />;
           })
