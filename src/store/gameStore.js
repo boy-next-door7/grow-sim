@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { calcClimate, calcDailyElectricity } from '../utils/climate';
-import { getClimateScore, getNutrientMatchScore, PHASES } from '../data/phases';
-import { SEEDS, NUTRIENTS, TOOLS, SUBSTRATES, DRIP_SYSTEMS, CONTROLLERS } from '../data/equipment';
+import { getClimateScore, PHASES } from '../data/phases';
+import { SEEDS, NUTRIENTS, TOOLS, SUBSTRATES, DRIP_SYSTEMS, CONTROLLERS, HUMIDIFIERS, POTS } from '../data/equipment';
 import { supabase } from '../lib/supabase';
 
 export const GAME_DAY_MS = 8 * 60 * 1000;
@@ -11,8 +11,20 @@ let _hybridCounter = 0;
 let _roomCounter = 0;
 let _saveStatusTimeout = null;
 
-const newPlantId  = () => `plant_${++_plantCounter}`;
-const newRoomId   = () => `room_${++_roomCounter}`;
+const newPlantId = () => `plant_${++_plantCounter}`;
+const newRoomId  = () => `room_${++_roomCounter}`;
+
+const WATER_USE = {
+  germination: 3, clone_rooting: 3, seedling: 5,
+  vegetative: 8, flowering: 10, late_flower: 10, harvest_ready: 6,
+};
+
+const NUTRIENT_USE = {
+  seedling:    { n: 1, p: 1, k: 1 },
+  vegetative:  { n: 4, p: 2, k: 2 },
+  flowering:   { n: 2, p: 4, k: 4 },
+  late_flower: { n: 1, p: 3, k: 5 },
+};
 
 function makeRoom(overrides = {}) {
   return {
@@ -20,6 +32,7 @@ function makeRoom(overrides = {}) {
     tent: null, lamp: null, lampHours: 18, lampIntensity: 100,
     exhaust: null, exhaustSpeed: 70,
     fan: null, filter: null,
+    humidifier: null, humidifierSpeed: 50,
     pots: [],
     drip: null, controller: null,
     climate: { temperature: 22, humidity: 55, lightHours: 18, effectivePPFD: 0 },
@@ -27,8 +40,7 @@ function makeRoom(overrides = {}) {
   };
 }
 
-// First room created before store init
-const INIT_ROOM = makeRoom(); // id = 'room_1'
+const INIT_ROOM = makeRoom();
 
 function makePlant(strain, potItem, substrateBonus = 0, overrides = {}) {
   return {
@@ -54,8 +66,11 @@ function makePlant(strain, potItem, substrateBonus = 0, overrides = {}) {
     dryingDay: 0,
     curingDay: 0,
     wateredToday: false,
-    fertilizedToday: false,
-    daysUnwatered: 0,
+    waterContent: 100,
+    nutrientN: 50,
+    nutrientP: 50,
+    nutrientK: 50,
+    organicQueue: [],
     substrateBonus,
     isMother: false,
     isClone: false,
@@ -141,12 +156,12 @@ function blendHex(a, b) {
 export const useGameStore = create((set, get) => ({
   started: false, gameOver: false,
   day: 1, money: 1000, tickerId: null, lastTick: null,
-  user: null, saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
+  user: null, saveStatus: 'idle',
 
   rooms: [{ ...INIT_ROOM }],
   activeRoomId: INIT_ROOM.id,
 
-  inventory: { seeds: {}, substrate: {}, nutrients: {}, tools: [] },
+  inventory: { seeds: {}, substrate: {}, nutrients: {}, tools: [], pots: {} },
   customStrains: [],
   plants: [],
 
@@ -171,6 +186,8 @@ export const useGameStore = create((set, get) => ({
 
   // ── rooms ───────────────────────────────────────────────
   addRoom() {
+    const { rooms } = get();
+    if (rooms.length >= 3) { get()._addNotification('Maximal 3 Zimmer möglich!', 'warn'); return; }
     const r = makeRoom();
     set(s => ({ rooms: [...s.rooms, r], activeRoomId: r.id }));
     get()._addNotification('Neues Zimmer eingerichtet', 'info');
@@ -185,9 +202,10 @@ export const useGameStore = create((set, get) => ({
   setActiveRoom(id) { set({ activeRoomId: id }); },
 
   // ── room settings ───────────────────────────────────────
-  setRoomLampHours(roomId, h)    { set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, lampHours:    Number(h) } : r) })); },
-  setRoomLampIntensity(roomId, v){ set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, lampIntensity: Number(v) } : r) })); },
-  setRoomExhaustSpeed(roomId, v) { set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, exhaustSpeed:  Number(v) } : r) })); },
+  setRoomLampHours(roomId, h)     { set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, lampHours:      Number(h) } : r) })); },
+  setRoomLampIntensity(roomId, v) { set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, lampIntensity:  Number(v) } : r) })); },
+  setRoomExhaustSpeed(roomId, v)  { set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, exhaustSpeed:   Number(v) } : r) })); },
+  setHumidifierSpeed(roomId, v)   { set(s => ({ rooms: s.rooms.map(r => r.id === roomId ? { ...r, humidifierSpeed: Number(v) } : r) })); },
 
   // ── buy equipment (→ active room) ───────────────────────
   buyEquipment(category, item) {
@@ -207,20 +225,72 @@ export const useGameStore = create((set, get) => ({
     _addNotification(`${item.name} gekauft`, 'success');
     return true;
   },
+
+  // ── pot inventory ────────────────────────────────────────
   buyPot(potItem) {
-    const { money, rooms, activeRoomId, _addNotification, _addTransaction } = get();
-    const room = rooms.find(r => r.id === activeRoomId);
-    if (!room?.tent) { _addNotification('Kein Zelt im aktiven Zimmer!', 'error'); return false; }
-    if (room.pots.length >= room.tent.maxPlants) { _addNotification('Zelt voll!', 'error'); return false; }
+    const { money, _addNotification, _addTransaction } = get();
     if (money < potItem.price) { _addNotification('Nicht genug Geld!', 'error'); return false; }
     set(s => ({
       money: s.money - potItem.price,
-      rooms: s.rooms.map(r => r.id === activeRoomId ? { ...r, pots: [...r.pots, potItem] } : r),
+      inventory: {
+        ...s.inventory,
+        pots: { ...s.inventory.pots, [potItem.id]: (s.inventory.pots?.[potItem.id] ?? 0) + 1 },
+      },
     }));
     _addTransaction(`Kauf: ${potItem.name}`, -potItem.price);
-    _addNotification(`${potItem.name} gekauft`, 'success');
+    _addNotification(`${potItem.name} ins Inventar gelegt`, 'success');
     return true;
   },
+  assignPotToRoom(potId, roomId) {
+    const { rooms, inventory, _addNotification } = get();
+    const room = rooms.find(r => r.id === roomId);
+    if (!room?.tent) { _addNotification('Kein Zelt im Zimmer!', 'error'); return false; }
+    if (room.pots.length >= room.tent.maxPlants) { _addNotification('Zelt voll!', 'error'); return false; }
+    const count = inventory.pots?.[potId] ?? 0;
+    if (count < 1) { _addNotification('Kein Topf im Inventar!', 'error'); return false; }
+    const potItem = POTS.find(p => p.id === potId);
+    if (!potItem) return false;
+    set(s => ({
+      inventory: { ...s.inventory, pots: { ...s.inventory.pots, [potId]: count - 1 } },
+      rooms: s.rooms.map(r => r.id === roomId ? { ...r, pots: [...r.pots, potItem] } : r),
+    }));
+    _addNotification(`${potItem.name} ins Zelt gestellt`, 'success');
+    return true;
+  },
+  unassignPot(roomId, potIndex) {
+    const { rooms, plants, inventory, _addNotification } = get();
+    const room = rooms.find(r => r.id === roomId);
+    const pot  = room?.pots[potIndex];
+    if (!pot) { _addNotification('Kein Topf!', 'error'); return false; }
+    if (plants.some(p => p.roomId === roomId && p.potIndex === potIndex && p.phase !== 'ready')) {
+      _addNotification('Topf ist belegt!', 'error'); return false;
+    }
+    const newPots = [...room.pots]; newPots.splice(potIndex, 1);
+    set(s => ({
+      inventory: { ...s.inventory, pots: { ...s.inventory.pots, [pot.id]: (s.inventory.pots?.[pot.id] ?? 0) + 1 } },
+      rooms: s.rooms.map(r => r.id === roomId ? { ...r, pots: newPots } : r),
+      plants: s.plants.map(p => p.roomId === roomId && p.potIndex > potIndex ? { ...p, potIndex: p.potIndex - 1 } : p),
+    }));
+    _addNotification(`${pot.name} aus Zelt entfernt`, 'info');
+    return true;
+  },
+  sellPotFromInventory(potId) {
+    const { inventory, _addNotification, _addTransaction } = get();
+    const count = inventory.pots?.[potId] ?? 0;
+    if (count < 1) { _addNotification('Kein Topf im Inventar!', 'error'); return false; }
+    const potItem = POTS.find(p => p.id === potId);
+    if (!potItem) return false;
+    const refund = Math.floor(potItem.price / 2);
+    set(s => ({
+      money: s.money + refund,
+      inventory: { ...s.inventory, pots: { ...s.inventory.pots, [potId]: count - 1 } },
+    }));
+    _addTransaction(`Verkauf: ${potItem.name}`, refund);
+    _addNotification(`${potItem.name} für ${refund}€ verkauft`, 'success');
+    return true;
+  },
+
+  // ── tools & consumables ──────────────────────────────────
   buyTool(toolItem) {
     const { money, inventory, _addNotification, _addTransaction } = get();
     if (money < toolItem.price) { _addNotification('Nicht genug Geld!', 'error'); return false; }
@@ -230,8 +300,6 @@ export const useGameStore = create((set, get) => ({
     _addNotification(`${toolItem.name} gekauft`, 'success');
     return true;
   },
-
-  // ── consumables ─────────────────────────────────────────
   buySeeds(strainId) {
     const strain = get().getAllStrains().find(s => s.id === strainId);
     if (!strain) return false;
@@ -268,7 +336,7 @@ export const useGameStore = create((set, get) => ({
     return true;
   },
 
-  // ── sell equipment ──────────────────────────────────────
+  // ── sell equipment ───────────────────────────────────────
   sellEquipment(category) {
     const { rooms, activeRoomId, plants, _addNotification, _addTransaction } = get();
     const room = rooms.find(r => r.id === activeRoomId);
@@ -295,25 +363,6 @@ export const useGameStore = create((set, get) => ({
     set(s => ({ money: s.money + refund, inventory: { ...s.inventory, tools: s.inventory.tools.filter(x => x !== toolId) } }));
     _addTransaction(`Verkauf: ${t.name}`, refund);
     _addNotification(`${t.name} für ${refund}€ verkauft`, 'success');
-    return true;
-  },
-  sellPot(roomId, potIndex) {
-    const { rooms, plants, _addNotification, _addTransaction } = get();
-    const room = rooms.find(r => r.id === roomId);
-    const pot = room?.pots[potIndex];
-    if (!pot) { _addNotification('Kein Topf!', 'error'); return false; }
-    if (plants.some(p => p.roomId === roomId && p.potIndex === potIndex && p.phase !== 'ready')) {
-      _addNotification('Topf ist belegt!', 'error'); return false;
-    }
-    const refund = Math.floor(pot.price / 2);
-    const newPots = [...room.pots]; newPots.splice(potIndex, 1);
-    set(s => ({
-      money: s.money + refund,
-      rooms: s.rooms.map(r => r.id === roomId ? { ...r, pots: newPots } : r),
-      plants: s.plants.map(p => p.roomId === roomId && p.potIndex > potIndex ? { ...p, potIndex: p.potIndex - 1 } : p),
-    }));
-    _addTransaction(`Verkauf: ${pot.name}`, refund);
-    _addNotification(`${pot.name} für ${refund}€ verkauft`, 'success');
     return true;
   },
 
@@ -345,7 +394,7 @@ export const useGameStore = create((set, get) => ({
   },
   removePlant(plantId) { set(s => ({ plants: s.plants.filter(p => p.id !== plantId) })); },
 
-  // ── plant care ──────────────────────────────────────────
+  // ── plant care ───────────────────────────────────────────
   waterRoom(roomId) {
     const { plants, _addNotification } = get();
     const targets = plants.filter(p =>
@@ -357,37 +406,73 @@ export const useGameStore = create((set, get) => ({
     set(s => ({
       plants: s.plants.map(p =>
         targets.some(t => t.id === p.id)
-          ? { ...p, health: Math.min(100, p.health + 5), wateredToday: true }
+          ? { ...p, waterContent: Math.min(100, (p.waterContent ?? 0) + 35), wateredToday: true }
           : p
       ),
     }));
-    _addNotification(`${targets.length} Pflanze${targets.length > 1 ? 'n' : ''} gegossen! +5 HP`, 'success');
+    _addNotification(`${targets.length} Pflanze${targets.length > 1 ? 'n' : ''} gegossen!`, 'success');
   },
-  waterPlant(plantId) {
-    const { plants, _addNotification } = get();
-    const plant = plants.find(p => p.id === plantId);
-    if (!plant) return;
-    if (['drying','curing','ready','harvest_ready','clone_rooting'].includes(plant.phase)) { _addNotification('Kein Gießen nötig.', 'warn'); return; }
-    if (plant.wateredToday) { _addNotification('Heute bereits gegossen!', 'warn'); return; }
-    set(s => ({ plants: s.plants.map(p => p.id === plantId ? { ...p, health: Math.min(100, p.health + 5), wateredToday: true } : p) }));
-    _addNotification(`${plant.strainName} gegossen! +5 HP`, 'success');
-  },
-  fertilizePlant(plantId, nutId) {
+  waterPlant(plantId, nutId = null) {
     const { plants, inventory, _addNotification } = get();
     const plant = plants.find(p => p.id === plantId);
     if (!plant) return;
-    if (['drying','curing','ready','germination','clone_rooting'].includes(plant.phase)) { _addNotification('Phase benötigt keinen Dünger.', 'warn'); return; }
-    if (plant.fertilizedToday) { _addNotification('Heute bereits gedüngt!', 'warn'); return; }
+    if (['drying','curing','ready','harvest_ready','clone_rooting'].includes(plant.phase)) {
+      _addNotification('Kein Gießen nötig.', 'warn'); return;
+    }
+    if (plant.wateredToday) { _addNotification('Heute bereits gegossen!', 'warn'); return; }
+
+    let nutUpdate = {};
+    let newInventory = inventory;
+    let notifExtra = '';
+
+    if (nutId) {
+      const nut = NUTRIENTS.find(n => n.id === nutId);
+      if (nut?.category === 'synthetic') {
+        const avail = inventory.nutrients[nutId] ?? 0;
+        if (avail < nut.mlPerFeed) { _addNotification(`Nicht genug ${nut.name}!`, 'error'); return; }
+        newInventory = { ...inventory, nutrients: { ...inventory.nutrients, [nutId]: avail - nut.mlPerFeed } };
+        nutUpdate = {
+          nutrientN: Math.min(100, (plant.nutrientN ?? 50) + nut.npk.n),
+          nutrientP: Math.min(100, (plant.nutrientP ?? 50) + nut.npk.p),
+          nutrientK: Math.min(100, (plant.nutrientK ?? 50) + nut.npk.k),
+        };
+        notifExtra = ` + ${nut.name}`;
+      }
+    }
+
+    set(s => ({
+      inventory: newInventory,
+      plants: s.plants.map(p => p.id === plantId
+        ? { ...p, waterContent: Math.min(100, (p.waterContent ?? 0) + 35), wateredToday: true, ...nutUpdate }
+        : p
+      ),
+    }));
+    _addNotification(`${plant.strainName} gegossen${notifExtra}`, 'success');
+  },
+  topDressPlant(plantId, nutId) {
+    const { plants, inventory, _addNotification } = get();
+    const plant = plants.find(p => p.id === plantId);
+    if (!plant) return;
+    if (['drying','curing','ready','germination','clone_rooting'].includes(plant.phase)) {
+      _addNotification('Top-Dressing in dieser Phase nicht möglich.', 'warn'); return;
+    }
     const nut = NUTRIENTS.find(n => n.id === nutId);
-    if (!nut) return;
+    if (!nut || nut.category !== 'organic') { _addNotification('Kein organischer Dünger!', 'error'); return; }
     const avail = inventory.nutrients[nutId] ?? 0;
     if (avail < nut.mlPerFeed) { _addNotification(`Nicht genug ${nut.name}!`, 'error'); return; }
-    const bonus = getNutrientMatchScore(plant.phase, nut.type) * 4;
+
+    const dailyN = nut.npkBoost.n / nut.releaseDays;
+    const dailyP = nut.npkBoost.p / nut.releaseDays;
+    const dailyK = nut.npkBoost.k / nut.releaseDays;
+
     set(s => ({
-      inventory: { ...s.inventory, nutrients: { ...s.inventory.nutrients, [nutId]: s.inventory.nutrients[nutId] - nut.mlPerFeed } },
-      plants: s.plants.map(p => p.id === plantId ? { ...p, quality: Math.min(100, p.quality + bonus), fertilizedToday: true } : p),
+      inventory: { ...s.inventory, nutrients: { ...s.inventory.nutrients, [nutId]: avail - nut.mlPerFeed } },
+      plants: s.plants.map(p => p.id === plantId
+        ? { ...p, organicQueue: [...(p.organicQueue ?? []), { nutId, dailyN, dailyP, dailyK, daysLeft: nut.releaseDays }] }
+        : p
+      ),
     }));
-    _addNotification(`${plant.strainName} gedüngt! +${bonus.toFixed(1)}% Qualität`, 'success');
+    _addNotification(`${nut.name} auf ${plant.strainName} ausgebracht (${nut.releaseDays} Tage Freisetzung)`, 'success');
   },
 
   // ── mother plants & clones ──────────────────────────────
@@ -445,7 +530,7 @@ export const useGameStore = create((set, get) => ({
       vegDays:     Math.round((s1.vegDays     + s2.vegDays)     / 2),
       flowerDays:  Math.round((s1.flowerDays  + s2.flowerDays)  / 2),
       yieldMin:    Math.round((s1.yieldMin    + s2.yieldMin)    / 2),
-      yieldMax:    Math.round((s1.yieldMax    + s2.yieldMax)    / 2 * 1.1), // slight hybrid vigour
+      yieldMax:    Math.round((s1.yieldMax    + s2.yieldMax)    / 2 * 1.1),
       thc:         Math.round((s1.thc         + s2.thc)         / 2),
       desc: `F1 Hybride: ${s1.name} × ${s2.name}`,
       color: blendHex(s1.color, s2.color),
@@ -509,7 +594,6 @@ export const useGameStore = create((set, get) => ({
 
       let next = { ...room, climate };
 
-      // Smart controller: auto-adjust exhaustSpeed toward 24°C target
       if (room.controller?.autoClimate && room.exhaust) {
         const diff = climate.temperature - 24;
         if (Math.abs(diff) > 1) {
@@ -521,7 +605,6 @@ export const useGameStore = create((set, get) => ({
       return next;
     });
 
-    // Rooms with active auto-watering today
     const autoWateredRooms = new Set(
       updatedRooms.filter(r => r.drip && (day % r.drip.waterEvery === 0)).map(r => r.id)
     );
@@ -547,18 +630,47 @@ export const useGameStore = create((set, get) => ({
       } else if (p.phase === 'curing') {
         p.curingDay += 1;
         p.quality = Math.min(100, p.quality + 0.5);
-      } else if (!['ready'].includes(p.phase)) {
-        // Water need tracking
-        const isAutoWatered = autoWateredRooms.has(plant.roomId);
-        const effectivelyWatered = p.wateredToday || isAutoWatered;
-        if (effectivelyWatered) {
-          p.daysUnwatered = 0;
-        } else {
-          p.daysUnwatered = (p.daysUnwatered ?? 0) + 1;
-          const penalty = p.daysUnwatered >= 3 ? 8 : p.daysUnwatered >= 2 ? 5 : 3;
-          p.health = Math.max(0, p.health - penalty);
-          if (p.daysUnwatered === 2) _addNotification(`${p.strainName} dringend wässern! (${p.daysUnwatered} Tage trocken)`, 'warn');
-          if (p.daysUnwatered === 4) _addNotification(`${p.strainName} verdorrt fast! Sofort gießen!`, 'error');
+      } else if (p.phase !== 'ready') {
+        // Auto-drip before consumption
+        if (autoWateredRooms.has(plant.roomId)) {
+          p.waterContent = Math.min(100, (p.waterContent ?? 100) + 35);
+        }
+
+        // Daily water consumption
+        const waterUse = WATER_USE[p.phase] ?? 5;
+        const prevWC = p.waterContent ?? 100;
+        p.waterContent = Math.max(0, prevWC - waterUse);
+
+        // Health penalty from low water
+        if (p.waterContent < 10)       p.health = Math.max(0, p.health - 10);
+        else if (p.waterContent < 20)  p.health = Math.max(0, p.health - 4);
+        else if (p.waterContent < 30)  p.health = Math.max(0, p.health - 2);
+
+        // Threshold-crossing notifications
+        if (p.waterContent < 20 && prevWC >= 20) _addNotification(`${p.strainName}: Wassergehalt kritisch! (${Math.round(p.waterContent)}%)`, 'warn');
+        if (p.waterContent < 10 && prevWC >= 10) _addNotification(`${p.strainName}: Pflanze verdorrt! Sofort gießen!`, 'error');
+
+        // Process organic queue
+        const nutUse = NUTRIENT_USE[p.phase] ?? { n: 0, p: 0, k: 0 };
+        let organicN = 0, organicP = 0, organicK = 0;
+        const newQueue = [];
+        for (const q of (p.organicQueue ?? [])) {
+          if (q.daysLeft <= 0) continue;
+          organicN += q.dailyN ?? 0;
+          organicP += q.dailyP ?? 0;
+          organicK += q.dailyK ?? 0;
+          if (q.daysLeft > 1) newQueue.push({ ...q, daysLeft: q.daysLeft - 1 });
+        }
+        p.organicQueue = newQueue;
+
+        // Update nutrients
+        p.nutrientN = Math.min(100, Math.max(0, (p.nutrientN ?? 50) + organicN - nutUse.n));
+        p.nutrientP = Math.min(100, Math.max(0, (p.nutrientP ?? 50) + organicP - nutUse.p));
+        p.nutrientK = Math.min(100, Math.max(0, (p.nutrientK ?? 50) + organicK - nutUse.k));
+
+        // Quality penalty for deficiency
+        if (p.nutrientN < 20 || p.nutrientP < 20 || p.nutrientK < 20) {
+          p.quality = Math.max(0, p.quality - 0.5);
         }
 
         // Controller quality bonus
@@ -579,7 +691,6 @@ export const useGameStore = create((set, get) => ({
       if (p.phase === 'ready'   && plant.phase === 'curing')  _addNotification(`${p.strainName} verkaufsbereit!`, 'success');
 
       p.wateredToday = false;
-      p.fertilizedToday = false;
       return p;
     });
 
@@ -592,7 +703,6 @@ export const useGameStore = create((set, get) => ({
       lastTick: Date.now(),
     });
     if ((day + 1) % 30 === 0) _addNotification(`Tag ${day + 1}: Monat abgeschlossen.`, 'info');
-    // Auto-save every 5 days
     if ((day + 1) % 5 === 0) get().saveGame();
   },
 
@@ -629,23 +739,28 @@ export const useGameStore = create((set, get) => ({
       .maybeSingle();
     if (error || !data) return false;
     const s = data.save_data;
-    // Reset counters to avoid ID collisions
-    _plantCounter   = Math.max(...(s.plants ?? []).map(p => parseInt(p.id.split('_')[1]) || 0), 0);
-    _roomCounter    = Math.max(...(s.rooms  ?? []).map(r => parseInt(r.id.split('_')[1]) || 0), 0);
-    _hybridCounter  = Math.max(...(s.customStrains ?? []).map(cs => parseInt(cs.id.split('_')[1]) || 0), 0);
+    _plantCounter  = Math.max(...(s.plants ?? []).map(p => parseInt(p.id.split('_')[1]) || 0), 0);
+    _roomCounter   = Math.max(...(s.rooms  ?? []).map(r => parseInt(r.id.split('_')[1]) || 0), 0);
+    _hybridCounter = Math.max(...(s.customStrains ?? []).map(cs => parseInt(cs.id.split('_')[1]) || 0), 0);
     set({
       day: s.day ?? 1,
       money: s.money ?? 1000,
-      plants: s.plants ?? [],
-      rooms: s.rooms ?? [],
+      plants: (s.plants ?? []).map(p => ({
+        waterContent: 100, nutrientN: 50, nutrientP: 50, nutrientK: 50, organicQueue: [],
+        ...p,
+      })),
+      rooms: (s.rooms ?? []).map(r => ({
+        humidifier: null, humidifierSpeed: 50,
+        ...r,
+      })),
       activeRoomId: s.rooms?.[0]?.id ?? null,
-      inventory: s.inventory ?? { seeds: {}, substrate: {}, nutrients: {}, tools: [] },
+      inventory: { seeds: {}, substrate: {}, nutrients: {}, tools: [], pots: {}, ...(s.inventory ?? {}) },
       customStrains: s.customStrains ?? [],
       transactions: s.transactions ?? [],
       totalSpent: s.totalSpent ?? 0,
       totalRevenue: s.totalRevenue ?? 0,
       electricityAccrued: s.electricityAccrued ?? 0,
-      started: false, // always show StartScreen so user can explicitly resume via "Fortsetzen"
+      started: false,
       gameOver: s.gameOver ?? false,
     });
     return true;
@@ -659,7 +774,7 @@ export const useGameStore = create((set, get) => ({
     set({
       started: false, gameOver: false, day: 1, money: 1000, tickerId: null, lastTick: null,
       rooms: [r], activeRoomId: r.id,
-      inventory: { seeds: {}, substrate: {}, nutrients: {}, tools: [] },
+      inventory: { seeds: {}, substrate: {}, nutrients: {}, tools: [], pots: {} },
       customStrains: [], plants: [],
       transactions: [], totalSpent: 0, totalRevenue: 0, electricityAccrued: 0, notifications: [],
     });

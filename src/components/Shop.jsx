@@ -1,29 +1,30 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import {
-  TENTS, LAMPS, EXHAUSTS, FANS, FILTERS, POTS,
+  TENTS, LAMPS, EXHAUSTS, FANS, FILTERS, POTS, HUMIDIFIERS,
   NUTRIENTS, TOOLS, SEEDS, SUBSTRATES, DRIP_SYSTEMS, CONTROLLERS,
 } from '../data/equipment';
 
 // ── Category config ───────────────────────────────────────
 const CATEGORIES = [
-  { id: 'tent',       label: 'Zelte',       icon: '🏕️',  color: 'text-amber-400',  bg: 'bg-amber-950/40',  border: 'border-amber-800/50' },
-  { id: 'lamp',       label: 'Lampen',      icon: '💡',  color: 'text-yellow-400', bg: 'bg-yellow-950/40', border: 'border-yellow-800/50' },
-  { id: 'exhaust',    label: 'Abluft',      icon: '🌀',  color: 'text-blue-400',   bg: 'bg-blue-950/40',   border: 'border-blue-800/50' },
-  { id: 'fan',        label: 'Lüfter',      icon: '💨',  color: 'text-cyan-400',   bg: 'bg-cyan-950/40',   border: 'border-cyan-800/50' },
-  { id: 'filter',     label: 'Filter',      icon: '🫧',  color: 'text-slate-400',  bg: 'bg-slate-950/40',  border: 'border-slate-800/50' },
-  { id: 'pot',        label: 'Töpfe',       icon: '🪴',  color: 'text-orange-400', bg: 'bg-orange-950/40', border: 'border-orange-800/50' },
-  { id: 'drip',       label: 'Bewässerung', icon: '💧',  color: 'text-sky-400',    bg: 'bg-sky-950/40',    border: 'border-sky-800/50' },
-  { id: 'controller', label: 'Controller',  icon: '🤖',  color: 'text-green-400',  bg: 'bg-green-950/40',  border: 'border-green-800/50' },
-  { id: 'seeds',      label: 'Samen',       icon: '🌱',  color: 'text-lime-400',   bg: 'bg-lime-950/40',   border: 'border-lime-800/50' },
-  { id: 'substrate',  label: 'Substrat',    icon: '🪨',  color: 'text-stone-400',  bg: 'bg-stone-950/40',  border: 'border-stone-800/50' },
-  { id: 'nutrients',  label: 'Dünger',      icon: '🧪',  color: 'text-teal-400',   bg: 'bg-teal-950/40',   border: 'border-teal-800/50' },
-  { id: 'tool',       label: 'Werkzeug',    icon: '🔧',  color: 'text-purple-400', bg: 'bg-purple-950/40', border: 'border-purple-800/50' },
+  { id: 'tent',       label: 'Zelte',         icon: '🏕️',  color: 'text-amber-400',  bg: 'bg-amber-950/40',  border: 'border-amber-800/50' },
+  { id: 'lamp',       label: 'Lampen',        icon: '💡',  color: 'text-yellow-400', bg: 'bg-yellow-950/40', border: 'border-yellow-800/50' },
+  { id: 'exhaust',    label: 'Abluft',        icon: '🌀',  color: 'text-blue-400',   bg: 'bg-blue-950/40',   border: 'border-blue-800/50' },
+  { id: 'fan',        label: 'Lüfter',        icon: '💨',  color: 'text-cyan-400',   bg: 'bg-cyan-950/40',   border: 'border-cyan-800/50' },
+  { id: 'filter',     label: 'Filter',        icon: '🫧',  color: 'text-slate-400',  bg: 'bg-slate-950/40',  border: 'border-slate-800/50' },
+  { id: 'humidifier', label: 'Befeuchter',    icon: '💦',  color: 'text-cyan-300',   bg: 'bg-cyan-950/40',   border: 'border-cyan-700/50' },
+  { id: 'pot',        label: 'Töpfe',         icon: '🪴',  color: 'text-orange-400', bg: 'bg-orange-950/40', border: 'border-orange-800/50' },
+  { id: 'drip',       label: 'Bewässerung',   icon: '💧',  color: 'text-sky-400',    bg: 'bg-sky-950/40',    border: 'border-sky-800/50' },
+  { id: 'controller', label: 'Controller',    icon: '🤖',  color: 'text-green-400',  bg: 'bg-green-950/40',  border: 'border-green-800/50' },
+  { id: 'seeds',      label: 'Samen',         icon: '🌱',  color: 'text-lime-400',   bg: 'bg-lime-950/40',   border: 'border-lime-800/50' },
+  { id: 'substrate',  label: 'Substrat',      icon: '🪨',  color: 'text-stone-400',  bg: 'bg-stone-950/40',  border: 'border-stone-800/50' },
+  { id: 'nutrients',  label: 'Dünger',        icon: '🧪',  color: 'text-teal-400',   bg: 'bg-teal-950/40',   border: 'border-teal-800/50' },
+  { id: 'tool',       label: 'Werkzeug',      icon: '🔧',  color: 'text-purple-400', bg: 'bg-purple-950/40', border: 'border-purple-800/50' },
 ];
 
 const EQUIP_ITEMS = {
   tent: TENTS, lamp: LAMPS, exhaust: EXHAUSTS, fan: FANS, filter: FILTERS,
-  drip: DRIP_SYSTEMS, controller: CONTROLLERS,
+  humidifier: HUMIDIFIERS, drip: DRIP_SYSTEMS, controller: CONTROLLERS,
 };
 
 // ── Room setup overview strip ─────────────────────────────
@@ -35,6 +36,7 @@ function RoomSetup({ room }) {
     { key: 'exhaust',    icon: '🌀',  label: room.exhaust?.name },
     { key: 'fan',        icon: '💨',  label: room.fan?.name },
     { key: 'filter',     icon: '🫧',  label: room.filter?.name },
+    { key: 'humidifier', icon: '💦',  label: room.humidifier?.name },
     { key: 'drip',       icon: '💧',  label: room.drip?.name },
     { key: 'controller', icon: '🤖',  label: room.controller?.name },
   ];
@@ -90,13 +92,14 @@ function EquipCard({ item, cat, equipped, onBuy, onSell, money }) {
 
         {/* Spec badges */}
         <div className="flex flex-wrap gap-1">
-          {item.maxPlants  && <Badge>{item.maxPlants} Pflanzen</Badge>}
-          {item.heat       && <Badge color="text-orange-400">+{item.heat}°C Wärme</Badge>}
-          {item.ppfd       && <Badge color="text-yellow-400">PPFD ×{item.ppfd}</Badge>}
-          {item.dimmable   && <Badge color="text-green-400">Dimmbar</Badge>}
-          {item.cooling    && <Badge color="text-blue-400">-{item.cooling}°C</Badge>}
-          {item.dehumid    && <Badge color="text-cyan-400">-{item.dehumid}% LF</Badge>}
-          {item.waterEvery && <Badge color="text-sky-400">💧 alle {item.waterEvery}d</Badge>}
+          {item.maxPlants   && <Badge>{item.maxPlants} Pflanzen</Badge>}
+          {item.heat        && <Badge color="text-orange-400">+{item.heat}°C Wärme</Badge>}
+          {item.ppfd        && <Badge color="text-yellow-400">PPFD ×{item.ppfd}</Badge>}
+          {item.dimmable    && <Badge color="text-green-400">Dimmbar</Badge>}
+          {item.cooling     && <Badge color="text-blue-400">-{item.cooling}°C</Badge>}
+          {item.dehumid     && <Badge color="text-cyan-400">-{item.dehumid}% LF</Badge>}
+          {item.humidify    && <Badge color="text-cyan-300">+{item.humidify}% LF</Badge>}
+          {item.waterEvery  && <Badge color="text-sky-400">💧 alle {item.waterEvery}d</Badge>}
           {item.autoClimate && <Badge color="text-green-400">🤖 Auto-Klima</Badge>}
           {item.qualityBonus && <Badge color="text-lime-400">+Qualität/Tag</Badge>}
         </div>
@@ -147,30 +150,25 @@ function Badge({ children, color = 'text-gray-400' }) {
 }
 
 // ── Pots ──────────────────────────────────────────────────
-function PotSection({ activeRoom, activeRoomId, plants, onBuy, onSell, money }) {
+function PotSection({ rooms, inventory, onBuy, onSell, money }) {
+  const hasPots = Object.values(inventory.pots ?? {}).some(v => v > 0);
   return (
     <div className="space-y-4">
-      {/* Existing pots */}
-      {activeRoom && activeRoom.pots.length > 0 && (
+      {/* Inventory pots */}
+      {hasPots && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-3">
-            Installiert ({activeRoom.pots.length}/{activeRoom.tent?.maxPlants ?? 0})
-          </div>
-          <div className="space-y-2">
-            {activeRoom.pots.map((pot, i) => {
-              const occupied = plants.some(p => p.roomId === activeRoomId && p.potIndex === i && p.phase !== 'ready');
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-3">Im Inventar</div>
+          <div className="flex flex-wrap gap-2">
+            {POTS.filter(p => (inventory.pots?.[p.id] ?? 0) > 0).map(p => {
+              const count = inventory.pots[p.id];
               return (
-                <div key={i} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/50">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-orange-400">🪴</span>
-                    <span className="text-gray-300">{pot.name}</span>
-                    {occupied && <span className="text-green-500 text-[10px]">● Belegt</span>}
-                  </div>
-                  <button onClick={() => onSell(activeRoomId, i)} disabled={occupied}
-                    className={`text-xs px-2 py-1 rounded font-bold transition-colors ${
-                      occupied ? 'text-gray-600 cursor-not-allowed' : 'text-orange-400 hover:text-orange-300'
-                    }`}>
-                    {occupied ? '—' : `Verkaufen (${Math.floor(pot.price / 2)}€)`}
+                <div key={p.id} className="flex items-center gap-2 bg-orange-950/20 border border-orange-800/40 rounded-lg px-3 py-2 text-xs">
+                  <span className="text-orange-400">🪴</span>
+                  <span className="text-orange-300 font-bold">{p.name}</span>
+                  <span className="text-gray-500">×{count}</span>
+                  <button onClick={() => onSell(p.id)}
+                    className="text-red-700 hover:text-red-500 ml-1 transition-colors text-[10px]">
+                    Verkaufen ({Math.floor(p.price / 2)}€)
                   </button>
                 </div>
               );
@@ -178,7 +176,6 @@ function PotSection({ activeRoom, activeRoomId, plants, onBuy, onSell, money }) 
           </div>
         </div>
       )}
-
       {/* Buy pots */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {POTS.map(item => {
@@ -200,7 +197,7 @@ function PotSection({ activeRoom, activeRoomId, plants, onBuy, onSell, money }) 
                 className={`w-full py-2 rounded-lg text-xs font-bold transition-colors ${
                   canAfford ? 'bg-orange-950/40 border border-orange-800/50 text-orange-400 hover:brightness-125' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
                 }`}>
-                {canAfford ? '+ Kaufen' : 'Zu teuer'}
+                {canAfford ? '+ Kaufen → Inventar' : 'Zu teuer'}
               </button>
             </div>
           );
@@ -340,27 +337,25 @@ export default function Shop() {
   const rooms         = useGameStore(s => s.rooms);
   const activeRoomId  = useGameStore(s => s.activeRoomId);
   const inventory     = useGameStore(s => s.inventory);
-  const plants        = useGameStore(s => s.plants);
   const customStrains = useGameStore(s => s.customStrains);
 
-  const buyEquipment  = useGameStore(s => s.buyEquipment);
-  const buyPot        = useGameStore(s => s.buyPot);
-  const buyTool       = useGameStore(s => s.buyTool);
-  const buySeeds      = useGameStore(s => s.buySeeds);
-  const buySubstrate  = useGameStore(s => s.buySubstrate);
-  const buyNutrients  = useGameStore(s => s.buyNutrients);
-  const sellEquipment = useGameStore(s => s.sellEquipment);
-  const sellTool      = useGameStore(s => s.sellTool);
-  const sellPot       = useGameStore(s => s.sellPot);
+  const buyEquipment       = useGameStore(s => s.buyEquipment);
+  const buyPot             = useGameStore(s => s.buyPot);
+  const buyTool            = useGameStore(s => s.buyTool);
+  const buySeeds           = useGameStore(s => s.buySeeds);
+  const buySubstrate       = useGameStore(s => s.buySubstrate);
+  const buyNutrients       = useGameStore(s => s.buyNutrients);
+  const sellEquipment      = useGameStore(s => s.sellEquipment);
+  const sellTool           = useGameStore(s => s.sellTool);
+  const sellPotFromInventory = useGameStore(s => s.sellPotFromInventory);
 
   const activeRoom = rooms.find(r => r.id === activeRoomId);
   const allStrains = [...SEEDS, ...customStrains];
   const cat        = CATEGORIES.find(c => c.id === activeCat);
 
-  // Badge count helper
   function getBadge(id) {
     if (EQUIP_ITEMS[id])    return activeRoom?.[id] ? '✓' : null;
-    if (id === 'pot')       return activeRoom?.pots.length > 0 ? activeRoom.pots.length : null;
+    if (id === 'pot')       { const t = Object.values(inventory.pots ?? {}).reduce((a,b)=>a+b,0); return t > 0 ? t : null; }
     if (id === 'tool')      return inventory.tools.length > 0 ? inventory.tools.length : null;
     if (id === 'seeds')     { const t = Object.values(inventory.seeds).reduce((a,b)=>a+b,0); return t > 0 ? t : null; }
     if (id === 'substrate') { const t = Object.values(inventory.substrate).reduce((a,b)=>a+b,0); return t > 0 ? `${t}L` : null; }
@@ -431,8 +426,8 @@ export default function Shop() {
           )}
 
           {activeCat === 'pot' && (
-            <PotSection activeRoom={activeRoom} activeRoomId={activeRoomId}
-              plants={plants} onBuy={buyPot} onSell={sellPot} money={money} />
+            <PotSection rooms={rooms} inventory={inventory}
+              onBuy={buyPot} onSell={sellPotFromInventory} money={money} />
           )}
 
           {activeCat === 'seeds' && (
@@ -456,18 +451,34 @@ export default function Shop() {
           )}
 
           {activeCat === 'nutrients' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {NUTRIENTS.map(item => (
-                <ConsumableCard key={item.id} item={item}
-                  owned={inventory.nutrients[item.id] ?? 0} ownedLabel="ml"
-                  accentColor="text-teal-300" onBuy={buyNutrients} money={money}
-                  badges={<>
-                    <Badge color="text-teal-400">NPK {item.npk.n}-{item.npk.p}-{item.npk.k}</Badge>
-                    <Badge>{item.mlPerFeed}ml / Feed</Badge>
-                    <Badge>{item.mlPerBuy}ml / Kauf</Badge>
-                  </>}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="text-xs text-gray-500">
+                <span className="text-blue-400 font-bold">Synthetisch</span> — ins Gießwasser, sofortige NPK-Wirkung.{' '}
+                <span className="text-amber-400 font-bold">Organisch</span> — Top-Dressing auf Substrat, langsame Freisetzung.
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {NUTRIENTS.map(item => {
+                  const isOrganic = item.category === 'organic';
+                  const npkValues = isOrganic ? item.npkBoost : item.npk;
+                  return (
+                    <ConsumableCard key={item.id} item={item}
+                      owned={inventory.nutrients[item.id] ?? 0} ownedLabel={isOrganic ? 'g' : 'ml'}
+                      accentColor={isOrganic ? 'text-amber-300' : 'text-teal-300'}
+                      onBuy={buyNutrients} money={money}
+                      badges={<>
+                        {isOrganic
+                          ? <Badge color="text-amber-400">🌿 Organisch</Badge>
+                          : <Badge color="text-blue-400">💧 Synthetisch</Badge>
+                        }
+                        <Badge color="text-teal-400">N{npkValues.n} P{npkValues.p} K{npkValues.k}</Badge>
+                        {isOrganic && item.releaseDays && <Badge color="text-orange-400">{item.releaseDays}d Freisetzung</Badge>}
+                        {!isOrganic && <Badge>{item.mlPerFeed}ml / Feed</Badge>}
+                        {item.qualityBonus > 0 && <Badge color="text-lime-400">+Qualität</Badge>}
+                      </>}
+                    />
+                  );
+                })}
+              </div>
             </div>
           )}
 

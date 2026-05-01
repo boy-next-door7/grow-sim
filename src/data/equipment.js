@@ -37,62 +37,36 @@ export const FILTERS = [
   { id: 'filter_l', name: 'Kohlefilter Large',  price: 85, desc: 'Bis 500 m³/h' },
 ];
 
+export const HUMIDIFIERS = [
+  { id: 'hum_mini',  name: 'Mini Luftbefeuchter',  price: 28,  watt: 15, humidify: 8,  desc: 'Erhöht LF um bis zu +8% bei 100%' },
+  { id: 'hum_large', name: 'Raum-Luftbefeuchter',  price: 75,  watt: 35, humidify: 20, desc: 'Starke LF-Erhöhung bis +20% — ideal für Veg & Curing' },
+];
+
 export const POTS = [
-  { id: 'pot_5',  name: 'Topf 5L',  price: 3,  liters: 5,  yieldFactor: 0.7, desc: 'Für Stecklinge & Keimlinge' },
-  { id: 'pot_11', name: 'Topf 11L', price: 5,  liters: 11, yieldFactor: 1.0, desc: 'Standard' },
+  { id: 'pot_5',  name: 'Topf 5L',  price: 3,  liters: 5,  yieldFactor: 0.7,  desc: 'Für Stecklinge & Keimlinge' },
+  { id: 'pot_11', name: 'Topf 11L', price: 5,  liters: 11, yieldFactor: 1.0,  desc: 'Standard' },
   { id: 'pot_15', name: 'Topf 15L', price: 8,  liters: 15, yieldFactor: 1.25, desc: 'Guter Ertrag' },
-  { id: 'pot_25', name: 'Topf 25L', price: 14, liters: 25, yieldFactor: 1.6, desc: 'Maximaler Ertrag' },
+  { id: 'pot_25', name: 'Topf 25L', price: 14, liters: 25, yieldFactor: 1.6,  desc: 'Maximaler Ertrag' },
 ];
 
 // Substrat – Verbrauchsartikel, wird beim Einpflanzen konsumiert
-// liters = Liter pro Packung; qualityBonus = täglicher Qualitätsbonus (%)
 export const SUBSTRATES = [
-  {
-    id: 'sub_erde',
-    name: 'Basic Erde (50L)',
-    price: 6,
-    liters: 50,
-    qualityBonus: 0,
-    drainageFactor: 0.7,
-    desc: 'Standard-Erde, gute Pufferung',
-  },
-  {
-    id: 'sub_premium',
-    name: 'Premium Grow-Erde (50L)',
-    price: 15,
-    liters: 50,
-    qualityBonus: 0.08,
-    drainageFactor: 0.8,
-    desc: 'Vorgedüngt, pH-puffernd, optimiert',
-  },
-  {
-    id: 'sub_coco',
-    name: 'Kokos-Substrat (50L)',
-    price: 12,
-    liters: 50,
-    qualityBonus: 0.06,
-    drainageFactor: 0.95,
-    desc: 'Schnelles Wachstum, sauber',
-  },
-  {
-    id: 'sub_hydro',
-    name: 'Hydro LECA (45L)',
-    price: 20,
-    liters: 45,
-    qualityBonus: 0.05,
-    drainageFactor: 1.0,
-    desc: 'Hydrokultur, maximale Kontrolle',
-  },
+  { id: 'sub_erde',    name: 'Basic Erde (50L)',       price: 6,  liters: 50, qualityBonus: 0,    drainageFactor: 0.7,  desc: 'Standard-Erde, gute Pufferung' },
+  { id: 'sub_premium', name: 'Premium Grow-Erde (50L)', price: 15, liters: 50, qualityBonus: 0.08, drainageFactor: 0.8,  desc: 'Vorgedüngt, pH-puffernd, optimiert' },
+  { id: 'sub_coco',    name: 'Kokos-Substrat (50L)',   price: 12, liters: 50, qualityBonus: 0.06, drainageFactor: 0.95, desc: 'Schnelles Wachstum, sauber' },
+  { id: 'sub_hydro',   name: 'Hydro LECA (45L)',       price: 20, liters: 45, qualityBonus: 0.05, drainageFactor: 1.0,  desc: 'Hydrokultur, maximale Kontrolle' },
 ];
 
-// Nährstoffe – Verbrauchsartikel (ml)
-// type: 'grow' = N-betont, 'bloom' = P/K-betont, 'complete' = ausgewogen
-// mlPerBuy = ml pro Kauf; mlPerFeed = ml Verbrauch pro Düngung pro Pflanze
+// Nährstoffe
+// category: 'synthetic' → via Gießwasser, sofortige NPK-Wirkung
+// category: 'organic'   → Top-Dressing auf Substrat, langsame Freisetzung
 export const NUTRIENTS = [
+  // ── Synthetische Dünger ─────────────────────────────────
   {
     id: 'nut_grow',
     name: 'Grow-Dünger (500ml)',
     price: 18,
+    category: 'synthetic',
     mlPerBuy: 500,
     mlPerFeed: 5,
     type: 'grow',
@@ -103,6 +77,7 @@ export const NUTRIENTS = [
     id: 'nut_bloom',
     name: 'Bloom-Dünger (500ml)',
     price: 18,
+    category: 'synthetic',
     mlPerBuy: 500,
     mlPerFeed: 5,
     type: 'bloom',
@@ -113,6 +88,7 @@ export const NUTRIENTS = [
     id: 'nut_pk_boost',
     name: 'PK Booster (250ml)',
     price: 22,
+    category: 'synthetic',
     mlPerBuy: 250,
     mlPerFeed: 4,
     type: 'pk_boost',
@@ -123,6 +99,7 @@ export const NUTRIENTS = [
     id: 'nut_micro',
     name: 'Micro-Nährstoffe (250ml)',
     price: 20,
+    category: 'synthetic',
     mlPerBuy: 250,
     mlPerFeed: 3,
     type: 'micro',
@@ -133,11 +110,70 @@ export const NUTRIENTS = [
     id: 'nut_complete',
     name: 'All-in-One (500ml)',
     price: 28,
+    category: 'synthetic',
     mlPerBuy: 500,
     mlPerFeed: 6,
     type: 'complete',
     npk: { n: 4, p: 4, k: 4 },
     desc: 'Ausgewogen – für alle Phasen geeignet',
+  },
+
+  // ── Organische Dünger (Top-Dressing) ───────────────────
+  {
+    id: 'org_eggshell',
+    name: 'Eierschalen (100g)',
+    price: 3,
+    category: 'organic',
+    mlPerBuy: 100,
+    mlPerFeed: 100,
+    type: 'organic',
+    npk: { n: 0, p: 0, k: 0 },
+    npkBoost: { n: 2, p: 8, k: 5 },
+    releaseDays: 7,
+    qualityBonus: 0,
+    desc: 'Calciumreich, langsame P/K-Freisetzung über 7 Tage',
+  },
+  {
+    id: 'org_coffee',
+    name: 'Kaffeesatz (200g)',
+    price: 4,
+    category: 'organic',
+    mlPerBuy: 100,
+    mlPerFeed: 100,
+    type: 'organic',
+    npk: { n: 0, p: 0, k: 0 },
+    npkBoost: { n: 20, p: 2, k: 2 },
+    releaseDays: 5,
+    qualityBonus: 0,
+    desc: 'Stickstoffreich, leicht säuernd – gut für Veg',
+  },
+  {
+    id: 'org_compost',
+    name: 'Komposttee (2L)',
+    price: 6,
+    category: 'organic',
+    mlPerBuy: 100,
+    mlPerFeed: 100,
+    type: 'organic',
+    npk: { n: 0, p: 0, k: 0 },
+    npkBoost: { n: 10, p: 8, k: 10 },
+    releaseDays: 10,
+    qualityBonus: 0.03,
+    desc: 'Ausgewogen, fördert Mikroleben im Substrat',
+  },
+  {
+    id: 'org_worm',
+    name: 'Wurmhumus (1L)',
+    price: 10,
+    category: 'organic',
+    mlPerBuy: 100,
+    mlPerFeed: 100,
+    type: 'organic',
+    npk: { n: 0, p: 0, k: 0 },
+    npkBoost: { n: 15, p: 12, k: 12 },
+    releaseDays: 14,
+    qualityBonus: 0.05,
+    desc: 'Bester organischer Booster — hohe NPK-Freisetzung + Qualitätsbonus',
   },
 ];
 
@@ -152,119 +188,25 @@ export const TOOLS = [
   { id: 'tool_cloner',   name: 'Klonbox (24-fach)',   price: 55, desc: 'Erhöht Steckling-Erfolgsrate', clonerBonus: 0.2 },
 ];
 
-// Samen – jetzt als Shop-Ware; werden als Inventar-Stück gekauft
-// price = Preis pro Samen; im Inventar als { strainId: anzahl }
+// Samen – im Inventar als { strainId: anzahl }
 export const SEEDS = [
-  {
-    id: 'seed_budget_auto',
-    name: 'Budget Auto',
-    price: 8,
-    type: 'auto',
-    germDays: 3, seedlingDays: 7, vegDays: 14, flowerDays: 35,
-    yieldMin: 18, yieldMax: 32,
-    thc: 12,
-    desc: 'Einfach, schnell, günstig',
-    color: '#86efac',
-  },
-  {
-    id: 'seed_ww',
-    name: 'White Widow',
-    price: 12,
-    type: 'photo',
-    germDays: 4, seedlingDays: 10, vegDays: 21, flowerDays: 56,
-    yieldMin: 35, yieldMax: 55,
-    thc: 18,
-    desc: 'Klassiker, robust, lohnend',
-    color: '#e2e8f0',
-  },
-  {
-    id: 'seed_og_kush',
-    name: 'OG Kush',
-    price: 15,
-    type: 'photo',
-    germDays: 4, seedlingDays: 10, vegDays: 28, flowerDays: 63,
-    yieldMin: 28, yieldMax: 48,
-    thc: 20,
-    desc: 'Hohes THC, Premium-Markt',
-    color: '#fde68a',
-  },
-  {
-    id: 'seed_ak47',
-    name: 'AK-47',
-    price: 14,
-    type: 'photo',
-    germDays: 3, seedlingDays: 10, vegDays: 21, flowerDays: 49,
-    yieldMin: 40, yieldMax: 62,
-    thc: 17,
-    desc: 'Hoher Ertrag, schnell',
-    color: '#fca5a5',
-  },
-  {
-    id: 'seed_nl',
-    name: 'Northern Lights',
-    price: 13,
-    type: 'photo',
-    germDays: 3, seedlingDays: 10, vegDays: 21, flowerDays: 49,
-    yieldMin: 35, yieldMax: 52,
-    thc: 18,
-    desc: 'Robust, guter Ertrag',
-    color: '#a5b4fc',
-  },
-  {
-    id: 'seed_gg_auto',
-    name: 'Gorilla Glue Auto',
-    price: 18,
-    type: 'auto',
-    germDays: 4, seedlingDays: 10, vegDays: 21, flowerDays: 49,
-    yieldMin: 50, yieldMax: 80,
-    thc: 22,
-    desc: 'Top-THC, bester Preis',
-    color: '#6ee7b7',
-  },
+  { id: 'seed_budget_auto', name: 'Budget Auto',      price: 8,  type: 'auto',  germDays: 3, seedlingDays: 7,  vegDays: 14, flowerDays: 35, yieldMin: 18, yieldMax: 32, thc: 12, desc: 'Einfach, schnell, günstig',    color: '#86efac' },
+  { id: 'seed_ww',          name: 'White Widow',      price: 12, type: 'photo', germDays: 4, seedlingDays: 10, vegDays: 21, flowerDays: 56, yieldMin: 35, yieldMax: 55, thc: 18, desc: 'Klassiker, robust, lohnend',   color: '#e2e8f0' },
+  { id: 'seed_og_kush',     name: 'OG Kush',          price: 15, type: 'photo', germDays: 4, seedlingDays: 10, vegDays: 28, flowerDays: 63, yieldMin: 28, yieldMax: 48, thc: 20, desc: 'Hohes THC, Premium-Markt',     color: '#fde68a' },
+  { id: 'seed_ak47',        name: 'AK-47',            price: 14, type: 'photo', germDays: 3, seedlingDays: 10, vegDays: 21, flowerDays: 49, yieldMin: 40, yieldMax: 62, thc: 17, desc: 'Hoher Ertrag, schnell',         color: '#fca5a5' },
+  { id: 'seed_nl',          name: 'Northern Lights',  price: 13, type: 'photo', germDays: 3, seedlingDays: 10, vegDays: 21, flowerDays: 49, yieldMin: 35, yieldMax: 52, thc: 18, desc: 'Robust, guter Ertrag',          color: '#a5b4fc' },
+  { id: 'seed_gg_auto',     name: 'Gorilla Glue Auto',price: 18, type: 'auto',  germDays: 4, seedlingDays: 10, vegDays: 21, flowerDays: 49, yieldMin: 50, yieldMax: 80, thc: 22, desc: 'Top-THC, bester Preis',         color: '#6ee7b7' },
 ];
 
 export const ELECTRICITY_PRICE = 0.35;
 export const WATER_COST_PER_PLANT_DAY = 0.5;
 
-// Bewässerungssysteme – per room slot, automatisiert das Gießen
-// waterEvery = alle N Tage automatisch gießen (1 = täglich, 2 = jeden 2. Tag)
 export const DRIP_SYSTEMS = [
-  {
-    id: 'drip_basic',
-    name: 'Tropfsystem Basic',
-    price: 35,
-    watt: 5,
-    waterEvery: 2,
-    desc: 'Gießt automatisch alle 2 Tage — halbiert den Trockenheits-Stress',
-  },
-  {
-    id: 'drip_auto',
-    name: 'Auto-Bewässerung Pro',
-    price: 120,
-    watt: 8,
-    waterEvery: 1,
-    desc: 'Vollautomatische tägliche Bewässerung — kein manuelles Gießen nötig',
-  },
+  { id: 'drip_basic', name: 'Tropfsystem Basic',    price: 35,  watt: 5, waterEvery: 2, desc: 'Gießt automatisch alle 2 Tage' },
+  { id: 'drip_auto',  name: 'Auto-Bewässerung Pro', price: 120, watt: 8, waterEvery: 1, desc: 'Vollautomatische tägliche Bewässerung' },
 ];
 
-// Klima-Controller – per room slot, automatisiert Klima-Steuerung
 export const CONTROLLERS = [
-  {
-    id: 'ctrl_timer',
-    name: 'Zeitschaltuhr',
-    price: 45,
-    watt: 2,
-    autoClimate: false,
-    qualityBonus: 0.05,
-    desc: 'Konsistente Lichtzyklen +0.05% Qualität/Tag',
-  },
-  {
-    id: 'ctrl_smart',
-    name: 'Smart-Controller',
-    price: 250,
-    watt: 10,
-    autoClimate: true,
-    qualityBonus: 0.05,
-    desc: 'Regelt Abluft automatisch auf Zieltemperatur 24°C',
-  },
+  { id: 'ctrl_timer', name: 'Zeitschaltuhr',   price: 45,  watt: 2,  autoClimate: false, qualityBonus: 0.05, desc: 'Konsistente Lichtzyklen +0.05% Qualität/Tag' },
+  { id: 'ctrl_smart', name: 'Smart-Controller', price: 250, watt: 10, autoClimate: true,  qualityBonus: 0.05, desc: 'Regelt Abluft automatisch auf Zieltemperatur 24°C' },
 ];

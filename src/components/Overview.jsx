@@ -1,6 +1,5 @@
 import { useGameStore } from '../store/gameStore';
 import { PHASES } from '../data/phases';
-import { TOOLS, SUBSTRATES, NUTRIENTS, SEEDS } from '../data/equipment';
 
 function StatCard({ label, value, sub, color = 'text-green-400' }) {
   return (
@@ -72,8 +71,6 @@ export default function Overview({ setTab }) {
   const totalRevenue       = useGameStore(s => s.totalRevenue);
   const totalSpent         = useGameStore(s => s.totalSpent);
   const transactions       = useGameStore(s => s.transactions);
-  const inventory          = useGameStore(s => s.inventory);
-  const customStrains      = useGameStore(s => s.customStrains);
 
   const activePlants = plants.filter(p => p.phase !== 'ready');
   const readyPlants  = plants.filter(p => p.phase === 'ready');
@@ -122,112 +119,6 @@ export default function Overview({ setTab }) {
         <StatCard label="Pflanzen" value={`${activePlants.length}`}
           sub={`${totalPots} Töpfe · ${rooms.length} Zimmer`} color="text-purple-400" />
       </div>
-
-      {/* Inventory */}
-      {inventory && (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Inventar</div>
-            <button
-              onClick={() => setTab('shop')}
-              className="text-xs text-green-400 hover:text-green-300 underline underline-offset-2"
-            >
-              Zum Shop →
-            </button>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-            {/* Tools */}
-            <div>
-              <div className="text-xs font-semibold text-gray-300 mb-2">🔧 Werkzeuge</div>
-              {inventory.tools && inventory.tools.length > 0 ? (
-                <ul className="space-y-1">
-                  {inventory.tools.map(toolId => {
-                    const tool = TOOLS.find(t => t.id === toolId);
-                    return (
-                      <li key={toolId} className="text-xs text-gray-400">
-                        {tool ? tool.name : toolId}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="text-xs text-gray-600 italic">Keine</div>
-              )}
-            </div>
-
-            {/* Seeds */}
-            <div>
-              <div className="text-xs font-semibold text-gray-300 mb-2">🌱 Samen</div>
-              {inventory.seeds && Object.values(inventory.seeds).some(v => v > 0) ? (
-                <ul className="space-y-1">
-                  {Object.entries(inventory.seeds).filter(([,v]) => v > 0).map(([strainId, count]) => {
-                    const seed = SEEDS.find(s => s.id === strainId)
-                      ?? customStrains?.find(s => s.id === strainId);
-                    return (
-                      <li key={strainId} className="text-xs flex items-center gap-1.5">
-                        {seed?.color && (
-                          <span
-                            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ background: seed.color }}
-                          />
-                        )}
-                        <span className="text-gray-400">
-                          {seed ? seed.name : strainId}
-                        </span>
-                        <span className="text-gray-500 ml-auto">×{count}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="text-xs text-gray-600 italic">Keine</div>
-              )}
-            </div>
-
-            {/* Substrate */}
-            <div>
-              <div className="text-xs font-semibold text-gray-300 mb-2">🪨 Substrat</div>
-              {inventory.substrate && Object.values(inventory.substrate).some(v => v > 0) ? (
-                <ul className="space-y-1">
-                  {Object.entries(inventory.substrate).filter(([,v]) => v > 0).map(([subId, liters]) => {
-                    const sub = SUBSTRATES.find(s => s.id === subId);
-                    return (
-                      <li key={subId} className="text-xs flex items-center justify-between gap-1">
-                        <span className="text-gray-400">{sub ? sub.name : subId}</span>
-                        <span className="text-gray-500 flex-shrink-0">{liters}L</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="text-xs text-gray-600 italic">Keine</div>
-              )}
-            </div>
-
-            {/* Nutrients */}
-            <div>
-              <div className="text-xs font-semibold text-gray-300 mb-2">🧪 Nährstoffe</div>
-              {inventory.nutrients && Object.values(inventory.nutrients).some(v => v > 0) ? (
-                <ul className="space-y-1">
-                  {Object.entries(inventory.nutrients).filter(([,v]) => v > 0).map(([nutId, ml]) => {
-                    const nut = NUTRIENTS.find(n => n.id === nutId);
-                    return (
-                      <li key={nutId} className="text-xs flex items-center justify-between gap-1">
-                        <span className="text-gray-400">{nut ? nut.name : nutId}</span>
-                        <span className="text-gray-500 flex-shrink-0">{ml}ml</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="text-xs text-gray-600 italic">Keine</div>
-              )}
-            </div>
-
-          </div>
-        </div>
-      )}
 
       {/* Per-room climate — compact summary strip */}
       {roomsWithClimate.length > 0 && (

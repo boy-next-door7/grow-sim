@@ -15,12 +15,13 @@ function useAdvisory() {
 
   const tips = [];
 
-  const veryDry = plants.filter(p => !['drying','curing','ready'].includes(p.phase) && (p.daysUnwatered ?? 0) >= 3);
-  const dry     = plants.filter(p => !['drying','curing','ready'].includes(p.phase) && (p.daysUnwatered ?? 0) === 2);
-  const thirsty = plants.filter(p => !['drying','curing','ready'].includes(p.phase) && (p.daysUnwatered ?? 0) === 1);
-  if (veryDry.length) tips.push({ msg: `${veryDry.length} Pflanze(n) verdorren — sofort gießen!`, type: 'error' });
-  else if (dry.length) tips.push({ msg: `${dry.length} Pflanze(n) dringend wässern (${dry[0].daysUnwatered}d)`, type: 'warn' });
-  else if (thirsty.length) tips.push({ msg: `${thirsty.length} Pflanze(n) heute gießen`, type: 'info' });
+  const active = plants.filter(p => !['drying','curing','ready'].includes(p.phase));
+  const critical = active.filter(p => (p.waterContent ?? 100) < 10);
+  const veryDry  = active.filter(p => (p.waterContent ?? 100) < 20 && (p.waterContent ?? 100) >= 10);
+  const thirsty  = active.filter(p => (p.waterContent ?? 100) < 30 && (p.waterContent ?? 100) >= 20);
+  if (critical.length) tips.push({ msg: `${critical.length} Pflanze(n) verdorren — sofort gießen!`, type: 'error' });
+  else if (veryDry.length) tips.push({ msg: `${veryDry.length} Pflanze(n) dringend wässern (<20% Wasser)`, type: 'warn' });
+  else if (thirsty.length) tips.push({ msg: `${thirsty.length} Pflanze(n) brauchen Wasser (<30%)`, type: 'info' });
 
   const ready = plants.filter(p => p.phase === 'ready');
   if (ready.length) tips.push({ msg: `${ready.length}× Ernte verkaufsbereit!`, type: 'success' });

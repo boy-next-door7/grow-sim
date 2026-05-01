@@ -6,12 +6,13 @@ const SPRITES = {
   clone_rooting: ['........','...X....','..XX....', '.XXX....','..XX....','...X....','..XXX...','........'],
   seedling:      ['........','...X....','..XXX...','.XXXXX..','..XXX...','.X.X.X..','...X....','........'],
   vegetative:    ['.X...X..','..XXX...','.XXXXX..','XXXXXXX.','.XXXXX..','...X....','..DXD...','..DDD...'],
-  // generic fallback for flowering (overridden by STRAIN_SPRITES below)
   flowering:     ['X.X.X.X.','.XXXXXXX','XXXXXXXX','.XXXXXX.','..XXXX..','...XX...','..DXD...','..DDD...'],
   late_flower:   ['XXXXXXXX','XXXXXXXX','XXXXXXXX','.XXXXXX.','.XXXXXX.','...XX...','..DXD...','..DDD...'],
-  harvest_ready: ['.X.XX.X.','XXXXXXXX','XXXXXXXX','XXXXXXXX','.XXXXXX.','...XX...','..DXD...','..DDD...'],
-  drying:        ['X.X.X.X.','.XX.XX..','..X.X...','...X....','...X....','...X....','........','........'],
-  curing:        ['.XXXXXX.','XXXXXXXX','X.XXXX.X','X......X','X.XXXX.X','X......X','XXXXXXXX','........'],
+  harvest_ready: ['BXBXBXBX','BXXXXXXB','XXXXXXXX','BXXXXXXB','XXXXXXXX','.BXXXB..','..DXD...','..DDD...'],
+  // Drying: plant hanging upside down from hook
+  drying:        ['...D....','..DDD...','...D....','..X.X...','..XXX...','.X...X..','..X.X...','...D....'],
+  // Curing: jar silhouette with material inside
+  curing:        ['..BBBB..','BBXXXXBB','B.BXXB.B','B.XXXX.B','B.BXXB.B','B.XXXX.B','BBXXXXBB','..BBBB..'],
   ready:         ['...X....','..X.X...','.X...X..','X.XXX..X','.X...X..','..X.X...','...X....','........'],
 };
 
@@ -21,19 +22,19 @@ const STRAIN_SPRITES = {
     // round, dense, fat bud structure
     flowering:     ['..XXXX..', '.XXXXXX.', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '..DXD...', '..DDD...'],
     late_flower:   ['BXXXXXXB', 'XXXXXXXX', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '..DXD...', '..DDD...'],
-    harvest_ready: ['BXBXXBXB', 'BXXXXXXB', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '..DXD...', '..DDD...'],
+    harvest_ready: ['BXBXBXBX', 'BXXXXXXB', 'XXXXXXXX', 'BXXXXXXB', 'XXXXXXXX', '..BXXB..', '..DXD...', '..DDD...'],
   },
   sativa: {
     // elongated, loose, cola-style
     flowering:     ['X.X.X.X.', '.X.X.X.X', 'X..XX..X', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
     late_flower:   ['X.XXXX.X', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
-    harvest_ready: ['XBX.XBX.', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+    harvest_ready: ['XBXBXBX.', 'BXXXXXXB', 'XXXXXXXX', 'BXXXXXXB', 'XXXXXXXX', '..BXXB..', '..DXD...', '..DDD...'],
   },
   auto: {
     // compact, small but well-formed
     flowering:     ['..XXXX..', '.XXXXXX.', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
     late_flower:   ['.XXXXXX.', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
-    harvest_ready: ['.BXXXBX.', 'BXXXXXXB', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '..DXD...', '..DDD...'],
+    harvest_ready: ['.BXBXBX.', 'BXXXXXXB', 'XXXXXXXX', 'BXXXXXXB', 'XXXXXXXX', '..BXXB..', '..DXD...', '..DDD...'],
   },
 };
 
@@ -99,14 +100,43 @@ const PHASE_LABELS = {
   curing:'CURING', ready:'FERTIG',
 };
 
+const PHASE_BG = {
+  harvest_ready: '#1c1800',
+  drying:        '#1a1005',
+  curing:        '#1a0e00',
+  ready:         '#001a15',
+};
+
+const PHASE_BORDER_GLOW = {
+  harvest_ready: '#fbbf24',
+  drying:        '#92400e',
+  curing:        '#b45309',
+  ready:         '#22d3ee',
+};
+
+// For drying/curing/ready, override sprite color for more accurate visuals
+const PHASE_COLOR_OVERRIDE = {
+  harvest_ready: null, // keep strain color but with glow
+  drying:        '#a16207',
+  curing:        '#d97706',
+  ready:         '#22d3ee',
+};
+
 function PlantTile({ plant, size, spritePx, onClick }) {
   const px         = spritePx ?? (size >= 80 ? 6 : 5);
-  const color      = plant.strainColor || '#86efac';
+  const baseColor  = plant.strainColor || '#86efac';
+  const colorOverride = PHASE_COLOR_OVERRIDE[plant.phase];
+  const color      = colorOverride ?? baseColor;
   const budStyle   = getBudStyle(plant);
   const animClass  = PHASE_ANIM[plant.phase] ?? '';
-  const dry        = plant.daysUnwatered ?? 0;
-  const needsWater = dry > 0 && !['drying','curing','ready'].includes(plant.phase);
-  const dryColor   = dry >= 3 ? '#ef4444' : dry >= 2 ? '#f97316' : '#93c5fd';
+
+  const wc = plant.waterContent ?? 100;
+  const needsWater = wc < 30 && !['drying','curing','ready','harvest_ready'].includes(plant.phase);
+  const waterColor = wc < 10 ? '#ef4444' : wc < 20 ? '#f97316' : '#93c5fd';
+
+  const bg         = PHASE_BG[plant.phase] ?? '#0d1a08';
+  const glowColor  = PHASE_BORDER_GLOW[plant.phase];
+  const borderColor = glowColor ?? (needsWater ? waterColor + '99' : color + '50');
 
   return (
     <div
@@ -114,26 +144,35 @@ function PlantTile({ plant, size, spritePx, onClick }) {
       className={`flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all hover:brightness-125 ${animClass}`}
       style={{
         width: size, height: size,
-        background: '#0d1a08',
-        border: `2px solid ${needsWater ? dryColor+'80' : color+'50'}`,
+        background: bg,
+        border: `2px solid ${borderColor}`,
+        boxShadow: glowColor ? `0 0 8px ${glowColor}40` : undefined,
         imageRendering: 'pixelated',
         userSelect: 'none',
       }}
-      title={`${plant.strainName} — ${plant.phase}${dry > 0 ? ` — ${dry}d ohne Wasser!` : ''}`}
+      title={`${plant.strainName} — ${plant.phase}${needsWater ? ` — Wasser: ${Math.round(wc)}%` : ''}`}
     >
       <Sprite phase={plant.phase} color={color} budStyle={budStyle} px={px} />
-      <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:4, color, letterSpacing:0, lineHeight:1.4, textAlign:'center' }}>
+      <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:4, color: glowColor ?? color, letterSpacing:0, lineHeight:1.4, textAlign:'center' }}>
         {PHASE_LABELS[plant.phase] ?? plant.phase.toUpperCase()}
       </div>
       {/* health strip */}
-      <div style={{ width:'80%', height:2, background:'#111' }}>
-        <div style={{ height:'100%', width:`${plant.health}%`, background: plant.health>60?'#22c55e':plant.health>30?'#eab308':'#ef4444' }} />
-      </div>
+      {!['drying','curing','ready'].includes(plant.phase) && (
+        <div style={{ width:'80%', height:2, background:'#111' }}>
+          <div style={{ height:'100%', width:`${plant.health}%`, background: plant.health>60?'#22c55e':plant.health>30?'#eab308':'#ef4444' }} />
+        </div>
+      )}
+      {/* water strip */}
+      {!['drying','curing','ready','harvest_ready'].includes(plant.phase) && (
+        <div style={{ width:'80%', height:2, background:'#111' }}>
+          <div style={{ height:'100%', width:`${wc}%`, background: wc>50?'#3b82f6':wc>20?'#f97316':'#ef4444' }} />
+        </div>
+      )}
       {/* badges row */}
       <div style={{ display:'flex', gap:3, alignItems:'center', height:6 }}>
         {needsWater && (
-          <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:3, color:dryColor, lineHeight:1 }}>
-            {dry >= 2 ? '!!' : '!'}{dry}D
+          <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:3, color:waterColor, lineHeight:1 }}>
+            {Math.round(wc)}%
           </div>
         )}
         {plant.isMother && (
